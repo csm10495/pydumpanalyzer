@@ -31,6 +31,8 @@ class Database(object):
     the shelf/database has the following tables:
         additions:
             {uuid -> Addition}
+        crashes:
+            {idx -> uuid}
     '''
     def __enter__(self):
         try:
@@ -46,11 +48,17 @@ class Database(object):
         self._rawShelf.close()
         shelfLock.release()
 
-    def getAdditionsList(self):
+    def getAdditionsDict(self):
         if 'additions' not in self._rawShelf:
             self._rawShelf['additions'] = {}
 
         return self._rawShelf['additions']
+
+    def getCrashesList(self):
+        if 'crashes' not in self._rawShelf:
+            self._rawShelf['crashes'] = []
+
+        return self._rawShelf['crashes']
 
     def getDestinationDirectory(self, uuid):
         uuidPath = os.path.join(ROOT_STORAGE_LOCATION, 'Additions', str(uuid))
@@ -113,7 +121,10 @@ class Database(object):
             crashDump.save(crashDumpFileName)
             crashDumpFileName = os.path.relpath(crashDumpFileName, ROOT_STORAGE_LOCATION)
 
-        self.getAdditionsList()[str(uid)] = Addition(ip, uid, datetime.datetime.utcnow(), symbolFileName, executableFileName, crashDumpFileName)
+            # add to crashes db
+            self.getCrashesList().append(uid)
+
+        self.getAdditionsDict()[str(uid)] = Addition(ip, uid, datetime.datetime.utcnow(), symbolFileName, executableFileName, crashDumpFileName)
 
         return jsonify({
             "uuid" : str(uid),
@@ -140,7 +151,7 @@ def getAll():
 def getZip(uuid):
     fullDir = None
     with Database() as db:
-        if uuid in db.getAdditionsList():
+        if uuid in db.getAdditionsDict():
             fullDir = db.getDestinationDirectory(uuid)
 
     if not fullDir:
@@ -174,6 +185,16 @@ def getWindowsSymbolStore(path):
     return jsonify({
         'status' : 'file does not exist'
     }), 404
+
+@app.route('/show/crashes', methods=['GET'])
+def showCrashList():
+    retStr = ''
+    with Database() as db:
+        crashes = db.getCrashesList()[::-1]
+        for idx, itm in enumerate(crashes):
+            retStr += "Crash %d: %s ... %s\n" % (idx, str(itm), db.getAdditionsDict()[str(itm)].Timestamp)
+
+    return retStr, 200
 
 if __name__ == '__main__':
     app.run()
