@@ -8,11 +8,14 @@ class Debugger(object):
         # do last
         self._platformSetup()
 
-    def getStackTrace(self):
-        pass
-
     def _platformSetup(self):
         '''
         do platform specific things in here
         '''
+        pass
+
+    def getStackTrace(self):
+        pass
+
+    def getRawAnalysis(self):
         pass
