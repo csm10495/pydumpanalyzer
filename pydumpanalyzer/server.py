@@ -9,22 +9,55 @@ import subprocess
 import tempfile
 import threading
 import uuid
+import pickle
 from io import BytesIO
+from windbg import WinDbg
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, Response
 
+CACHED_ANALYSIS_FILE_NAME = 'analysis.pickle'
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
 ROOT_STORAGE_LOCATION = os.path.join(THIS_DIR, 'storage')
 DATABASE_LOCATION = os.path.join(ROOT_STORAGE_LOCATION, 'server.shelf')
 SYM_STORE = r"C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\symstore.exe"
 WINDOWS_SYMBOLS_LOCATION = os.path.join(ROOT_STORAGE_LOCATION, "WindowsSymbols")
 
+class SupportedOperatingSystems(enum.Enum):
+    WINDOWS = "Windows"
+    LINUX = "Linux"
+
 VERISON = "1.0" # todo.. get from package
 
-Addition = collections.namedtuple("Addition", ("UploaderIp", "UUID", "Timestamp", "SymbolsPath", "ExePath", "DumpPath"))
+Addition = collections.namedtuple("Addition", ("UploaderIp", "UUID", "Timestamp", "SymbolsPath", "ExePath", "DumpPath", "OS"))
 
 app = Flask("PyDumpAnalyzerServer")
 shelfLock = threading.Lock()
+
+def _getHtmlLinkString(url, text):
+    return r'<a href="%s">%s</a>' % (url, text)
+
+def _getHtmlImage(url, style='display:block;', width='100%%', height='100%%', caption="A caption"):
+    return '<img style="%s" width="%s" height="%s" src="%s" title="%s"/>' % (style, width, height, url, caption)
+
+class HtmlTable(object):
+    def __init__(self, firstRow=None):
+        self.hasHeader = firstRow is not None
+        self.rows = [firstRow]
+    def addRow(self, row):
+        self.rows.append(row)
+    def reverse(self):
+        if not self.hasHeader:
+            self.rows = self.rows[::-1]
+        else:
+            self.rows[1:] = self.rows[1:][::-1]
+    def __str__(self):
+        retStr = '<table style="width:100%">\n'
+        for row in self.rows:
+            retStr += "<tr>\n"
+            for col in row:
+                retStr += "<th>%s</th>\n" % str(col)
+            retStr += "</tr>"
+        return retStr + "</table>\n"
 
 class Database(object):
     '''
@@ -60,8 +93,11 @@ class Database(object):
 
         return self._rawShelf['crashes']
 
-    def getDestinationDirectory(self, uuid):
-        uuidPath = os.path.join(ROOT_STORAGE_LOCATION, 'Additions', str(uuid))
+    def getAdditionsDirectory(self):
+        return os.path.join(ROOT_STORAGE_LOCATION, 'Additions')
+
+    def getAdditionDestinationDirectory(self, uuid):
+        uuidPath = os.path.join(self.getAdditionsDirectory(), str(uuid))
         return uuidPath
 
     def addToWindowsSymbolStore(self, objPath, uid):
@@ -89,13 +125,22 @@ class Database(object):
         symbolFile = request.files.get('symbols')
         executableFile = request.files.get('exe')
         crashDump = request.files.get('dump')
+        operatingSystem = request.form.get('os')
+
+        if operatingSystem not in [v.value for v in SupportedOperatingSystems.__members__.values()]:
+            return jsonify({
+                "uuid" : str(uid),
+                "status" : "operating system is not supported. Should have been one of: %s" % [v.value for v in SupportedOperatingSystems.__members__.values()],
+            }), 400
+        operatingSystemEnumValue = SupportedOperatingSystems(operatingSystem).value
+
         if not (symbolFile or executableFile or crashDump):
             return jsonify({
                 "uuid" : str(uid),
                 "status" : "Neither symbols/exe/dump file given",
             }), 400
 
-        destDir = self.getDestinationDirectory(uid)
+        destDir = self.getAdditionDestinationDirectory(uid)
         os.makedirs(destDir)
 
         symbolFileName = None
@@ -105,14 +150,14 @@ class Database(object):
         if symbolFile:
             symbolFileName = os.path.join(destDir, symbolFile.filename)
             symbolFile.save(symbolFileName)
-            if symbolFileName.endswith('.pdb'):
+            if operatingSystemEnumValue == SupportedOperatingSystems.WINDOWS.value:
                 self.addToWindowsSymbolStore(symbolFileName, str(uid))
             symbolFileName = os.path.relpath(symbolFileName, ROOT_STORAGE_LOCATION)
 
         if executableFile:
             executableFileName = os.path.join(destDir, executableFile.filename)
             executableFile.save(executableFileName)
-            if executableFileName.endswith('.exe'):
+            if operatingSystemEnumValue == SupportedOperatingSystems.WINDOWS.value:
                 self.addToWindowsSymbolStore(executableFileName, str(uid))
             executableFileName = os.path.relpath(executableFileName, ROOT_STORAGE_LOCATION)
 
@@ -124,7 +169,8 @@ class Database(object):
             # add to crashes db
             self.getCrashesList().append(uid)
 
-        self.getAdditionsDict()[str(uid)] = Addition(ip, uid, datetime.datetime.utcnow(), symbolFileName, executableFileName, crashDumpFileName)
+        self.getAdditionsDict()[str(uid)] = Addition(ip, uid, datetime.datetime.utcnow(), symbolFileName,
+                                                     executableFileName, crashDumpFileName, operatingSystemEnumValue)
 
         return jsonify({
             "uuid" : str(uid),
@@ -152,7 +198,7 @@ def getZip(uuid):
     fullDir = None
     with Database() as db:
         if uuid in db.getAdditionsDict():
-            fullDir = db.getDestinationDirectory(uuid)
+            fullDir = db.getAdditionDestinationDirectory(uuid)
 
     if not fullDir:
         return fullDir({
@@ -189,12 +235,83 @@ def getWindowsSymbolStore(path):
 @app.route('/show/crashes', methods=['GET'])
 def showCrashList():
     retStr = ''
+    table = HtmlTable(["Crash #", "Submission UUID", "Dump File", "UTC Timestamp", "OS", "Actions"])
     with Database() as db:
-        crashes = db.getCrashesList()[::-1]
+        crashes = db.getCrashesList()
         for idx, itm in enumerate(crashes):
-            retStr += "Crash %d: %s ... %s\n" % (idx, str(itm), db.getAdditionsDict()[str(itm)].Timestamp)
+            addition = db.getAdditionsDict()[str(itm)]
+            table.addRow([_getHtmlLinkString('/show/crashes/%s' % str(itm),
+                                            str(idx)),
+                           _getHtmlLinkString('/get/zip/%s' % str(itm),
+                                              str(itm)),
+                                              os.path.basename(addition.DumpPath),
+                           addition.Timestamp,
+                           addition.OS,
+                           _getHtmlLinkString('/do/delete/cache/%s' % str(itm),
+                                              _getHtmlImage("https://www.recycling.com/wp-content/uploads/recycling%20symbols/black/Black%20Recycling%20Symbol%20%28U%2B267B%29.jpg",
+                                              width="20",
+                                              height="",
+                                              caption="Delete cached analysis file"))
+                         ])
+        table.reverse()
 
-    return retStr, 200
+    return str(table), 200
+
+@app.route('/show/crashes/<uuid>', methods=['GET'])
+def showCrashAnalysis(uuid):
+    with Database() as db:
+        theAddition = db.getAdditionsDict().get(uuid, None)
+        additionsDirectory = db.getAdditionsDirectory()
+        thisUuidAdditonPath = db.getAdditionDestinationDirectory(uuid)
+
+    if not theAddition:
+        return jsonify({
+            'status' : 'uuid was not found',
+        }), 404
+
+    if not theAddition.DumpPath:
+        return jsonify({
+            'status' : 'dump was not found for given uuid',
+        }), 404
+
+    fullDumpPath = os.path.join(ROOT_STORAGE_LOCATION, theAddition.DumpPath)
+
+    # exe is hopefully in symbol store, so if we don't have it here, it should be ok
+    fullExePath = None
+    if theAddition.ExePath:
+        fullExePath = os.path.join(ROOT_STORAGE_LOCATION, theAddition.ExePath)
+
+    # we may already have the analysis saved off. If we do use it. Don't regen
+    cachedAnalysisFile = os.path.join(thisUuidAdditonPath, CACHED_ANALYSIS_FILE_NAME)
+    if os.path.isfile(cachedAnalysisFile):
+        with open(cachedAnalysisFile, 'rb') as f:
+            analysis = pickle.loads(f.read())
+    elif theAddition.OS == SupportedOperatingSystems.WINDOWS.value:
+        analysis = WinDbg(fullDumpPath, WINDOWS_SYMBOLS_LOCATION, fullExePath).getAnalysis()
+        with open(cachedAnalysisFile, 'wb') as f:
+            f.write(pickle.dumps(analysis))
+    else:
+        return jsonify({
+            "status" : "unable to debug the given uuid",
+        }), 400
+
+    return Response(str(analysis), status=200, mimetype='text/plain')
+
+@app.route('/do/delete/cache/<uuid>', methods=['GET'])
+def deleteAnalysisCache(uuid):
+    with Database() as db:
+        thisUuidAdditonPath = db.getAdditionDestinationDirectory(uuid)
+
+    cachedAnalysisFile = os.path.join(thisUuidAdditonPath, CACHED_ANALYSIS_FILE_NAME)
+    if os.path.isfile(cachedAnalysisFile):
+        os.remove(cachedAnalysisFile)
+        return jsonify({
+            "status" : "cached analysis file removed"
+        }), 200
+
+    return jsonify({
+            "status" : "cached analysis file did not exist, so nothing happened"
+    }), 200
 
 if __name__ == '__main__':
     app.run()

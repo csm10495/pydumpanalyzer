@@ -12,6 +12,7 @@ from stack import Stack
 
 MAX_STACK_DEPTH = 100
 REGEX_FILE_AND_LINE_FROM_FRAME = re.compile(r'\[(.*)@\s*(\d+)')
+DOWNSTREAM_TEMP_SYMBOLS = os.path.join(tempfile.gettempdir(), "DownstreamSymbols")
 
 # think py2 would need this
 if not hasattr(subprocess, 'DEVNULL'):
@@ -25,11 +26,11 @@ class WinDbg(Debugger):
 
         # add Microsoft symbol store
         # should we have a place to cache symbols other than self.symbols?
-        self.symbols = "SRV*" + self.symbols + "*http://msdl.microsoft.com/download/symbols"
+        self.symbols = "SRV*" + DOWNSTREAM_TEMP_SYMBOLS + "*" + self.symbols + "*http://msdl.microsoft.com/download/symbols"
 
     def _startWinDbg(self):
         windbgRealPath = os.path.join(os.path.dirname(self._cdbDbgPath), 'windbg.exe')
-        return self._callWinDbg(debugCommandsList=[], exitAfterCommands=False, exeOverload=windbgRealPath)
+        return self._callWinDbg(debugCommandsList=[], exitAfterCommands=False, exeOverload=windbgRealPath, timeout=100000000000)
 
     def _callWinDbg(self, debugCommandsList, gotoExceptionContext=True, printHeaderFooter=True, exitAfterCommands=True, getJustCommandOutput=True, exeOverload=None, timeout=60):
         if isinstance(debugCommandsList, str):
@@ -81,12 +82,13 @@ class WinDbg(Debugger):
                 self.crashDump,
                 "-y",
                 self.symbols,
-                "-i",
-                self.executable,
                 "-logo",
                 tempFileName,
                 "-c",
                 cmdsWithSemiColons]
+
+        if self.executable:
+            args.extend(["-i", self.executable])
         try:
             process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
