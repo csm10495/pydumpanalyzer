@@ -29,6 +29,7 @@ class SupportedOperatingSystems(enum.Enum):
 VERISON = "1.0" # todo.. get from package
 
 Addition = collections.namedtuple("Addition", ("UploaderIp", "UUID", "Timestamp", "SymbolsPath", "ExePath", "DumpPath", "OS"))
+Addition2 = collections.namedtuple("Addition", ("UploaderIp", "UUID", "Timestamp", "SymbolsPath", "ExePath", "DumpPath", "OS", 'Tag'))
 
 app = Flask("PyDumpAnalyzerServer")
 shelfLock = threading.Lock()
@@ -69,7 +70,7 @@ $(document).ready(function(){{
 {searchButton}
 
 <table style="width:100%">
-    <thead>
+    <thead style="text-align: left">
         {headers}
     </thead>
     <tbody id="table_{id}">
@@ -165,6 +166,7 @@ class Database(object):
         executableFile = request.files.get('exe')
         crashDump = request.files.get('dump')
         operatingSystem = request.form.get('os')
+        tag = request.form.get('tag')
 
         if operatingSystem not in [v.value for v in SupportedOperatingSystems.__members__.values()]:
             return jsonify({
@@ -209,7 +211,8 @@ class Database(object):
             self.getCrashesList().append(uid)
 
         self.getAdditionsDict()[str(uid)] = Addition(ip, uid, datetime.datetime.utcnow(), symbolFileName,
-                                                     executableFileName, crashDumpFileName, operatingSystemEnumValue)
+                                                     executableFileName, crashDumpFileName, operatingSystemEnumValue,
+                                                     tag)
 
         return jsonify({
             "uuid" : str(uid),
@@ -274,7 +277,7 @@ def getWindowsSymbolStore(path):
 @app.route('/show/crashes', methods=['GET'])
 def showCrashList():
     retStr = ''
-    table = HtmlTable(["Crash #", "Submission UUID", "Dump File", "UTC Timestamp", "OS", "Actions"])
+    table = HtmlTable(["Crash #", "Submission UUID", "Dump File", "Tag", "UTC Timestamp", "OS", "Actions"])
     with Database() as db:
         crashes = db.getCrashesList()
         for idx, itm in enumerate(crashes):
@@ -284,6 +287,7 @@ def showCrashList():
                            _getHtmlLinkString('/get/zip/%s' % str(itm),
                                               str(itm)),
                                               os.path.basename(addition.DumpPath),
+                           getattr(addition, 'Tag', None),
                            addition.Timestamp,
                            addition.OS,
                            _getHtmlLinkString('/do/delete/cache/%s' % str(itm),
