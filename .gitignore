@@ -1,3 +1,8 @@
 *.pyc
 pydumpanalyzer/storage/
 reporting/local/
+
+**/Debug/
+**/Release/
+**/.vs/
+**.user

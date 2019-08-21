@@ -1,8 +1,9 @@
 '''
-Script to clone down breakpad in a format that we'll be using for further development.
+Script to clone down breakpad and others in a format that we'll be using for further development.
 '''
 
 import os
+import requests
 import shutil
 import subprocess
 
@@ -26,14 +27,18 @@ if __name__ == '__main__':
 
         print('Step 2: Move to local dir')
         os.chdir(LOCAL_DIR)
+        
+        print("Step 3: Grab version 1.8 of CLI11")
+        d = requests.get("https://github.com/CLIUtils/CLI11/releases/download/v1.8.0/CLI11.hpp")
+        d.write(os.path.join(LOCAL_DIR, 'CLI11.hpp'))
 
-        print('Step 3, clone depot_tools')
+        print('Step 4: clone depot_tools')
         subprocess.check_call('git clone https://chromium.googlesource.com/chromium/tools/depot_tools', shell=True)
 
-        print('Step 4, put depot_tools in PATH before everything else')
+        print('Step 5: put depot_tools in PATH before everything else')
         os.environ['PATH'] = os.path.join(LOCAL_DIR, 'depot_tools') + os.environ['PATH']
 
-        print('Step 5, fetch breakpad')
+        print('Step 6: fetch breakpad')
         os.mkdir('breakpad')
         os.chdir('breakpad')
         subprocess.check_call('fetch breakpad', shell=True)
