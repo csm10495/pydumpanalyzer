@@ -29,16 +29,22 @@ if __name__ == '__main__':
         os.chdir(LOCAL_DIR)
         
         print("Step 3: Grab version 1.8 of CLI11")
-        d = requests.get("https://github.com/CLIUtils/CLI11/releases/download/v1.8.0/CLI11.hpp")
-        d.write(os.path.join(LOCAL_DIR, 'CLI11.hpp'))
+        d = requests.get("https://github.com/CLIUtils/CLI11/releases/download/v1.8.0/CLI11.hpp").content.decode()
+        with open(os.path.join(LOCAL_DIR, 'CLI11.hpp'), 'w') as f:
+            f.write(d)
 
         print('Step 4: clone depot_tools')
-        subprocess.check_call('git clone https://chromium.googlesource.com/chromium/tools/depot_tools', shell=True)
+        subprocess.check_call('git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git', shell=True)
 
-        print('Step 5: put depot_tools in PATH before everything else')
-        os.environ['PATH'] = os.path.join(LOCAL_DIR, 'depot_tools') + os.environ['PATH']
+        print('Step 5: put depot_tools in PATH')
+        depotToolsPath = os.path.join(LOCAL_DIR, 'depot_tools')
+        if os.name == 'nt':
+            # on windows remove all path besides normal windows/powershell since we may have an incompatible python installed that would confuse depot_tools/fetch
+            os.environ['PATH'] = r"C:/windows/system32;C:\Windows\System32\WindowsPowerShell\v1.0;" + depotToolsPath
+        else:
+            os.environ['PATH'] = depotToolsPath + os.pathsep + os.environ['PATH']
 
         print('Step 6: fetch breakpad')
         os.mkdir('breakpad')
         os.chdir('breakpad')
-        subprocess.check_call('fetch breakpad', shell=True)
+        subprocess.check_call(['fetch', 'breakpad'], shell=True)
