@@ -36,28 +36,67 @@ shelfLock = threading.Lock()
 def _getHtmlLinkString(url, text):
     return r'<a href="%s">%s</a>' % (url, text)
 
-def _getHtmlImage(url, style='display:block;', width='100%%', height='100%%', caption="A caption"):
-    return '<img style="%s" width="%s" height="%s" src="%s" title="%s"/>' % (style, width, height, url, caption)
+def _getHtmlImage(url, style='display:block;', width='100%%', height='100%%', caption="A caption", onclick=""):
+    return '<img style="%s" width="%s" height="%s" src="%s" title="%s" onclick="%s"/>' % (style, width, height, url, caption, onclick)
+
+def _toHtmlSafe(s):
+    return str(s).replace('#', '').replace(' ', '')
 
 class HtmlTable(object):
-    def __init__(self, firstRow=None):
-        self.hasHeader = firstRow is not None
-        self.rows = [firstRow]
+    def __init__(self, headers):
+        self.headers = [_toHtmlSafe(h) for h in headers]
+        self.id = 'id_' + _toHtmlSafe(uuid.uuid4())
+        self.rows = []
     def addRow(self, row):
         self.rows.append(row)
     def reverse(self):
-        if not self.hasHeader:
-            self.rows = self.rows[::-1]
-        else:
-            self.rows[1:] = self.rows[1:][::-1]
+        self.rows = self.rows[::-1]
     def __str__(self):
-        retStr = '<table style="width:100%">\n'
+        HTML = '''
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+<script>
+$(document).ready(function(){{
+  $("#input_{id}").on("keyup", function() {{
+    var value = $(this).val().toLowerCase();
+    $("#table_{id} tr").filter(function() {{
+      $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+    }});
+  }});
+}});
+</script>
+
+<input id="input_{id}" type="text" placeholder="Search..." style="display: none">
+{searchButton}
+
+<table style="width:100%">
+    <thead>
+        {headers}
+    </thead>
+    <tbody id="table_{id}">
+        {rows}
+    </tbody>
+</table
+'''
+
+        headerText = '<tr>\n'
+        for row in self.headers:
+            headerText += '<th>%s</th>\n' % (row)
+        headerText += '</tr>\n'
+
+        rowText = ''
         for row in self.rows:
-            retStr += "<tr>\n"
-            for col in row:
-                retStr += "<th>%s</th>\n" % str(col)
-            retStr += "</tr>"
-        return retStr + "</table>\n"
+            rowText += '<tr>\n'
+            for colIdx, value in enumerate(row):
+                rowText += '<td>%s</td>\n' % (value)
+            rowText += '</tr>\n'
+
+        return HTML.format(id=self.id,
+                           rows=rowText,
+                           headers=headerText,
+                           searchButton=_getHtmlImage("https://image.flaticon.com/icons/png/512/55/55369.png",
+                                                      height="20", width="auto", caption="Search this table...",
+                                                      onclick="document.getElementById('input_{id}').style.display='block';event.target.style.display='none'".format(id=self.id))
+                          )
 
 class Database(object):
     '''
