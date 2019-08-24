@@ -13,7 +13,7 @@ import pickle
 from io import BytesIO
 from windbg import WinDbg
 
-from flask import Flask, jsonify, request, send_file, Response
+from flask import Flask, jsonify, request, send_file, Response, render_template, escape
 
 CACHED_ANALYSIS_FILE_NAME = 'analysis.pickle'
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -219,8 +219,8 @@ class Database(object):
             "status" : "successfully uploaded the given files",
         }), 200
 
-@app.route('/')
-def root():
+@app.route('/get/version')
+def version():
     return jsonify({
         'version' : VERISON
     })
@@ -298,7 +298,7 @@ def showCrashList():
                          ])
         table.reverse()
 
-    return str(table), 200
+    return render_template('base.html', html_content=str(table))
 
 @app.route('/show/crashes/<uuid>', methods=['GET'])
 def showCrashAnalysis(uuid):
@@ -338,7 +338,12 @@ def showCrashAnalysis(uuid):
             "status" : "unable to debug the given uuid",
         }), 400
 
-    return Response(str(analysis), status=200, mimetype='text/plain')
+    return render_template('analysis.html', uuid=uuid, analysis=escape(str(analysis)).splitlines())
+
+@app.route('/', methods=['GET'])
+def showHome():
+    return render_template('home.html')
+
 
 @app.route('/do/delete/cache/<uuid>', methods=['GET'])
 def deleteAnalysisCache(uuid):
@@ -357,4 +362,5 @@ def deleteAnalysisCache(uuid):
     }), 200
 
 if __name__ == '__main__':
+    app.url_map.strict_slashes = False
     app.run()
