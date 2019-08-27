@@ -1,5 +1,6 @@
 import collections
 import contextlib
+import csmlog
 import datetime
 import enum
 import os
@@ -14,6 +15,8 @@ from io import BytesIO
 from windbg import WinDbg
 
 from flask import Flask, jsonify, request, send_file, Response, render_template, escape
+
+csmlog.setup("pda")
 
 CACHED_ANALYSIS_FILE_NAME = 'analysis.pickle'
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
