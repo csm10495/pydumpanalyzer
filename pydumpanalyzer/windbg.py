@@ -1,14 +1,17 @@
+''' this contains the implementation for the WinDbg Debugger '''
+
 import os
+import re
 import subprocess
 import sys
-import time
 import tempfile
-import re
+import time
 
+from csmlog_setup import getLogger
 from debugger import Debugger
 from frame import Frame
-from variable import Variable
 from stack import Stack
+from variable import Variable
 
 MAX_STACK_DEPTH = 100
 REGEX_FILE_AND_LINE_FROM_FRAME = re.compile(r'\[(.*)@\s*(\d+)')
@@ -18,18 +21,57 @@ DOWNSTREAM_TEMP_SYMBOLS = os.path.join(tempfile.gettempdir(), "DownstreamSymbols
 if not hasattr(subprocess, 'DEVNULL'):
     subprocess.DEVNULL = open(os.devnull)
 
+logger = getLogger(__file__)
+
+# @todo.. this should be in its own file
+class WindowsSymbolStore(object):
+    SYM_STORE = r"C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\symstore.exe"
+    def __init__(self, path):
+        if not os.path.isfile(self.SYM_STORE):
+            raise EnvironmentError("Can't find symstore: %s" % self.SYM_STORE)
+
+        self.path = path
+
+    def add(self, objPath, compressed=False):
+        args = [
+            self.SYM_STORE,
+            'add',
+            "/s",
+            self.path,
+            "/t",
+            os.path.splitext(objPath)[0],
+            "/f",
+            objPath,
+        ]
+
+        if compressed:
+            args.append('/compress')
+
+        logger.debug("calling: %s" % args)
+        output = subprocess.check_output(args)
+        logger.debug("output: %s" % output)
+
 class WinDbg(Debugger):
+    CDB_DBG_PATH = r'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\cdb.exe'
     def _platformSetup(self):
-        self._cdbDbgPath = r'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\cdb.exe'
-        if not os.path.isfile(self._cdbDbgPath):
-            raise EnvironmentError("Could not find CDB: %s" % self._cdbDbgPath)
+        if not os.path.isfile(self.CDB_DBG_PATH):
+            raise EnvironmentError("Could not find CDB: %s" % self.CDB_DBG_PATH)
+
+        self._addSymbolsToDownstreamStoreIfNeeded()
 
         # add Microsoft symbol store
         # should we have a place to cache symbols other than self.symbols?
         self.symbols = "SRV*" + DOWNSTREAM_TEMP_SYMBOLS + "*" + self.symbols + "*http://msdl.microsoft.com/download/symbols"
 
+    def _addSymbolsToDownstreamStoreIfNeeded(self):
+        symStore = WindowsSymbolStore(DOWNSTREAM_TEMP_SYMBOLS)
+
+        # if this is a file... add to store. As it will be downstream, it can't be compressed
+        if os.path.isfile(self.symbols):
+            symStore.add(self.symbols, compressed=False)
+
     def _startWinDbg(self):
-        windbgRealPath = os.path.join(os.path.dirname(self._cdbDbgPath), 'windbg.exe')
+        windbgRealPath = os.path.join(os.path.dirname(self.CDB_DBG_PATH), 'windbg.exe')
         return self._callWinDbg(debugCommandsList=[], exitAfterCommands=False, exeOverload=windbgRealPath, timeout=100000000000)
 
     def _callWinDbg(self, debugCommandsList, gotoExceptionContext=True, printHeaderFooter=True, exitAfterCommands=True, getJustCommandOutput=True, exeOverload=None, timeout=60):
@@ -42,6 +84,10 @@ class WinDbg(Debugger):
         if gotoExceptionContext:
             debugCommandsList = ['.ecxr'] + debugCommandsList
 
+        # enable line numbers (since we need to do this to enable them for cdb. windb has this enabled automatically)
+        # see https://social.msdn.microsoft.com/Forums/en-US/a72dbabf-f8e2-4937-821e-a7ed37d41797/why-is-windbg-and-cdb-show-different-output-when-looking-at-the-stack-for-a-dump-file?forum=vsdebug
+        debugCommandsList = ['.symopt+0x10'] + debugCommandsList
+
         outputHeader = None
         outputFooter = None
         if printHeaderFooter:
@@ -53,7 +99,7 @@ class WinDbg(Debugger):
                 if outputHeader is None:
 
                     # if this was auto added, don't consider it part of this.
-                    if not (gotoExceptionContext and dc == '.ecxr'):
+                    if (not (gotoExceptionContext and dc == '.ecxr')) and dc != '.symopt+0x10':
                         outputHeader = finalCommandList[-1].split('.echo ', 1)[1]
 
                 finalCommandList.append(dc)
@@ -74,7 +120,7 @@ class WinDbg(Debugger):
         if exeOverload is not None:
             exe = exeOverload
         else:
-            exe = self._cdbDbgPath
+            exe = self.CDB_DBG_PATH
 
         cmdsWithSemiColons = ';'.join(debugCommandsList)
         args = [exe,
@@ -136,7 +182,7 @@ class WinDbg(Debugger):
     def _getLineAndWarningForStackTrace(self, index, trace):
         warning = False
         for line in trace.splitlines():
-            if not line:
+            if not line.strip():
                 continue
 
             if 'Stack unwind information not available' in line:
@@ -245,7 +291,6 @@ class WinDbg(Debugger):
         threadId = self._getThreadId()
         return Stack(frames, threadId)
 
-
     def getRawAnalysis(self):
         return self._callWinDbg([
             '!analyze -v',
@@ -254,5 +299,5 @@ class WinDbg(Debugger):
 
 if __name__ == '__main__':
     w = WinDbg(r"C:\Users\csm10495\Desktop\TheCrasher\TestAll\6e71a81b-9d54-4966-be65-bbe7ef2b390a.dmp",
-               r"C:\Users\csm10495\Desktop\TheCrasher\TestAll",
+               r"C:\Users\csm10495\Desktop\TheCrasher\TestAll\TheCrasher.pdb",
                r"C:\Users\csm10495\Desktop\TheCrasher\TestAll\TheCrasher.exe")

@@ -1,13 +1,13 @@
 import collections
-import csmlog
 import os
 import sqlite3
 import threading
 
+from csmlog_setup import getLogger
 from server import ROOT_STORAGE_LOCATION
 
 DATABASE_FILE = os.path.join(ROOT_STORAGE_LOCATION, 'database.sqlite')
-logger = csmlog.getLogger('database.py')
+logger = getLogger('database.py')
 
 # Ensure our storage folder exists
 try:

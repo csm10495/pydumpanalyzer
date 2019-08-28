@@ -1,22 +1,22 @@
 import collections
 import contextlib
-import csmlog
 import datetime
 import enum
 import os
+import pickle
 import shelve
 import shutil
 import subprocess
 import tempfile
 import threading
 import uuid
-import pickle
 from io import BytesIO
+
+from flask import (Flask, Response, escape, jsonify, render_template, request,
+                   send_file)
+
+from csmlog_setup import getLogger
 from windbg import WinDbg
-
-from flask import Flask, jsonify, request, send_file, Response, render_template, escape
-
-csmlog.setup("pda")
 
 CACHED_ANALYSIS_FILE_NAME = 'analysis.pickle'
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
