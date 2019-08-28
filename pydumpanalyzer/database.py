@@ -30,10 +30,12 @@ class Database(object):
 
     _LOCK = threading.Lock() # lock for async access
 
-    def __init__(self, databaseFile=DATABASE_FILE):
-        ''' initializer, takes in the location of the database '''
+    def __init__(self, databaseFile=DATABASE_FILE, commitOnClose=True):
+        ''' initializer, takes in the location of the database.
+        Optionally, the user can choose to commit on closing this or not at all. '''
         self.databaseFile = databaseFile
         self.database = None
+        self.commitOnClose = commitOnClose
 
     def __enter__(self):
         ''' called when entering via a context manager '''
@@ -48,12 +50,18 @@ class Database(object):
 
     def open(self):
         ''' opens the connection to the database '''
-        self.database = sqlite3.connect(self.databaseFile)
+        self.database = sqlite3.connect(self.databaseFile, isolation_level=None)
         self.database.row_factory = _rowToNamedTuple
+
+        # at this point we own the responsibility of commiting on our own since
+        #  we are in our own transaction.
+        self.execute('BEGIN')
 
     def close(self):
         ''' closes the connect to the database '''
         if self.database:
+            if self.commitOnClose:
+                self.database.commit()
             self.database.close()
             self.database = None
 

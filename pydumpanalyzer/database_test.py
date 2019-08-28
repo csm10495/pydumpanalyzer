@@ -1,5 +1,6 @@
 ''' this file contains tests for the database module '''
 
+import os
 import unittest
 
 from csmlog_setup import getLogger
@@ -79,3 +80,56 @@ class TestDatabase(unittest.TestCase):
             Column('TextColumn2', "INT"),
             Column('TextColumn3', "INT"), # wrong type!
         ])
+
+    def test_ensure_commit_on_close_works(self):
+        ''' ensure commitOnClose works '''
+        TEST_DB_FILE = os.path.join(os.path.dirname(__file__), 'test_db.sqlite')
+        if os.path.isfile(TEST_DB_FILE):
+            os.remove(TEST_DB_FILE)
+
+        self.database = Database(TEST_DB_FILE, commitOnClose=False)
+        self.database.open()
+
+        assert self.database.createTable('MyTable', [
+            Column("TextColumn1", "TEXT")
+        ])
+        assert self.database.tableExists('MyTable')
+
+        self.database.close()
+
+        # now the table shouldn't exist since we did not commit
+        self.database = Database(TEST_DB_FILE, commitOnClose=True)
+        self.database.open()
+
+        assert not self.database.tableExists('MyTable')
+
+        assert self.database.createTable('MyTable', [
+            Column("TextColumn1", "TEXT")
+        ])
+
+        self.database.close()
+
+        # now the table should exist since we did commit
+        self.database = Database(TEST_DB_FILE)
+        self.database.open()
+
+        assert self.database.tableExists('MyTable')
+
+        self.database.addRow('MyTable', {
+            'TextColumn1': 'MyText'
+        })
+
+        assert len(self.database.execute("SELECT * FROM MyTable").fetchall()) == 1
+        self.database.commitOnClose = False
+        self.database.close()
+
+        # Now make sure that row is gone
+        self.database = Database(TEST_DB_FILE)
+        self.database.open()
+
+        assert self.database.tableExists('MyTable')
+
+        assert len(self.database.execute("SELECT * FROM MyTable").fetchall()) == 0
+        self.database.close()
+
+        os.remove(TEST_DB_FILE)
