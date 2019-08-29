@@ -12,6 +12,7 @@ from debugger import Debugger
 from frame import Frame
 from stack import Stack
 from variable import Variable
+from windows_symbol_store import WindowsSymbolStore
 
 MAX_STACK_DEPTH = 100
 REGEX_FILE_AND_LINE_FROM_FRAME = re.compile(r'\[(.*)@\s*(\d+)')
@@ -22,34 +23,6 @@ if not hasattr(subprocess, 'DEVNULL'):
     subprocess.DEVNULL = open(os.devnull)
 
 logger = getLogger(__file__)
-
-# @todo.. this should be in its own file
-class WindowsSymbolStore(object):
-    SYM_STORE = r"C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\symstore.exe"
-    def __init__(self, path):
-        if not os.path.isfile(self.SYM_STORE):
-            raise EnvironmentError("Can't find symstore: %s" % self.SYM_STORE)
-
-        self.path = path
-
-    def add(self, objPath, compressed=False):
-        args = [
-            self.SYM_STORE,
-            'add',
-            "/s",
-            self.path,
-            "/t",
-            os.path.splitext(objPath)[0],
-            "/f",
-            objPath,
-        ]
-
-        if compressed:
-            args.append('/compress')
-
-        logger.debug("calling: %s" % args)
-        output = subprocess.check_output(args)
-        logger.debug("output: %s" % output)
 
 class WinDbg(Debugger):
     CDB_DBG_PATH = r'C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\cdb.exe'
