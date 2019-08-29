@@ -1,19 +1,12 @@
+''' home to the abstract database class which is used for working with the a sqlite3 database '''
 import collections
 import os
 import sqlite3
 import threading
 
 from csmlog_setup import getLogger
-from server import ROOT_STORAGE_LOCATION
 
-DATABASE_FILE = os.path.join(ROOT_STORAGE_LOCATION, 'database.sqlite')
-logger = getLogger('database.py')
-
-# Ensure our storage folder exists
-try:
-    os.makedirs(ROOT_STORAGE_LOCATION)
-except:
-    pass
+logger = getLogger(__file__)
 
 Column = collections.namedtuple('Column', ['Name', 'Type'])
 
@@ -23,15 +16,15 @@ def _rowToNamedTuple(cursor, row):
     Row = collections.namedtuple("Row", fields)
     return Row(*row)
 
-class Database(object):
+class AbstractDatabase(object):
     '''
     wrapper for working with the application database
     '''
 
     _LOCK = threading.Lock() # lock for async access
 
-    def __init__(self, databaseFile=DATABASE_FILE, commitOnClose=True):
-        ''' initializer, takes in the location of the database.
+    def __init__(self, databaseFile=':memory:', commitOnClose=True):
+        ''' initializer, takes in the location of the database. By default it is :memory:
         Optionally, the user can choose to commit on closing this or not at all. '''
         self.databaseFile = databaseFile
         self.database = None
@@ -39,14 +32,14 @@ class Database(object):
 
     def __enter__(self):
         ''' called when entering via a context manager '''
-        Database._LOCK.acquire()
+        AbstractDatabase._LOCK.acquire()
         self.open()
         return self
 
     def __exit__(self, type, value, traceback):
         ''' called when exiting via a context manager '''
         self.close()
-        Database._LOCK.acquire()
+        AbstractDatabase._LOCK.release()
 
     def open(self):
         ''' opens the connection to the database '''
@@ -102,7 +95,7 @@ class Database(object):
 
     def createTable(self, tableName, columns):
         ''' creates the given table with the given columns. The columns should be a list of Column tuples.'''
-        sqlStatement = 'CREATE TABLE {tableName} (Id INTEGER PRIMARY KEY AUTOINCREMENT, '.format(tableName=tableName)
+        sqlStatement = 'CREATE TABLE {tableName} (IdKey INTEGER PRIMARY KEY AUTOINCREMENT, '.format(tableName=tableName)
         for col in columns:
             sqlStatement += ('%s %s,' % (col.Name, col.Type))
 

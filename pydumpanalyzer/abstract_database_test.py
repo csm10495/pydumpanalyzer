@@ -1,20 +1,20 @@
-''' this file contains tests for the database module '''
+''' this file contains tests for the abstract_database module '''
 
 import os
 import unittest
 
 from csmlog_setup import getLogger
-from database import Column, Database
+from abstract_database import Column, AbstractDatabase
 
 logger = getLogger(__file__)
 
-class TestDatabase(unittest.TestCase):
-    ''' quick unit tests for the database class '''
+class TestAbstractDatabase(unittest.TestCase):
+    ''' quick unit tests for the abstract database class '''
 
     def setUp(self):
         ''' called at the start of each test case '''
         logger.info("starting test case: %s" % self.id())
-        self.database = Database(':memory:')
+        self.database = AbstractDatabase(':memory:')
         self.database.open()
 
     def tearDown(self):
@@ -87,7 +87,7 @@ class TestDatabase(unittest.TestCase):
         if os.path.isfile(TEST_DB_FILE):
             os.remove(TEST_DB_FILE)
 
-        self.database = Database(TEST_DB_FILE, commitOnClose=False)
+        self.database = AbstractDatabase(TEST_DB_FILE, commitOnClose=False)
         self.database.open()
 
         assert self.database.createTable('MyTable', [
@@ -98,7 +98,7 @@ class TestDatabase(unittest.TestCase):
         self.database.close()
 
         # now the table shouldn't exist since we did not commit
-        self.database = Database(TEST_DB_FILE, commitOnClose=True)
+        self.database = AbstractDatabase(TEST_DB_FILE, commitOnClose=True)
         self.database.open()
 
         assert not self.database.tableExists('MyTable')
@@ -110,7 +110,7 @@ class TestDatabase(unittest.TestCase):
         self.database.close()
 
         # now the table should exist since we did commit
-        self.database = Database(TEST_DB_FILE)
+        self.database = AbstractDatabase(TEST_DB_FILE)
         self.database.open()
 
         assert self.database.tableExists('MyTable')
@@ -124,7 +124,7 @@ class TestDatabase(unittest.TestCase):
         self.database.close()
 
         # Now make sure that row is gone
-        self.database = Database(TEST_DB_FILE)
+        self.database = AbstractDatabase(TEST_DB_FILE)
         self.database.open()
 
         assert self.database.tableExists('MyTable')
@@ -133,3 +133,9 @@ class TestDatabase(unittest.TestCase):
         self.database.close()
 
         os.remove(TEST_DB_FILE)
+
+    def test_database_as_contextmanager(self):
+        ''' makes sure the context manager usage works '''
+        with AbstractDatabase(':memory:') as m:
+            assert m.createTable('Table2', [])
+            assert m.tableExists('Table2')

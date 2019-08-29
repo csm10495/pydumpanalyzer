@@ -19,8 +19,6 @@ from csmlog_setup import getLogger
 from windbg import WinDbg
 
 CACHED_ANALYSIS_FILE_NAME = 'analysis.pickle'
-THIS_DIR = os.path.abspath(os.path.dirname(__file__))
-ROOT_STORAGE_LOCATION = os.path.join(THIS_DIR, 'storage')
 DATABASE_LOCATION = os.path.join(ROOT_STORAGE_LOCATION, 'server.shelf')
 SYM_STORE = r"C:\Program Files (x86)\Windows Kits\10\Debuggers\x86\symstore.exe"
 WINDOWS_SYMBOLS_LOCATION = os.path.join(ROOT_STORAGE_LOCATION, "WindowsSymbols")
