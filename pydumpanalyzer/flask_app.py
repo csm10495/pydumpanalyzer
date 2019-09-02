@@ -14,8 +14,10 @@ import flask
 import flask_selfdoc
 
 import __version__
+import _html
 import utility
 from csmlog_setup import getLogger
+from storage import Storage
 
 CACHED_ANALYSIS_FILE_NAME = 'analysis.pickle'
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -57,12 +59,17 @@ def apiDocumentation():
 @auto.doc()
 def home():
     ''' the home page for the app '''
-    return flask.render_template('home.html')
+    with Storage() as storage:
+        cursor = storage.database.execute("SELECT Name FROM Applications")
+        table = _html.HtmlTable.fromCursor(cursor, classes='content', name="Applications")
 
-@app.route('/get/zip/<uuid>', methods=['GET'])
-@auto.doc()
-def getZip(uuid):
-    return flask.render_template('base.html', html_content='hi')
+    if table:
+        pass
+        # add links to the view the Application's tables
+    else:
+        table = '<p>No applications have reported back to PDA... yet!</p>'
+
+    return flask.render_template('home.html', html_content=table)
 
 if __name__ == '__main__':
     app.url_map.strict_slashes = False
