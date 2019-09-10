@@ -72,3 +72,18 @@ def test_from_cursor():
         html = t.__html__()
         assert html.count('MyValue') == 1
         assert html.count('Column1') == 1
+
+def test_modifying_all_rows():
+    ''' ensures that the modify all rows function works '''
+    h = HtmlTable(['A', 'B', 'C'])
+    h.addRow(['0', '1', '2'])
+    h.addRow(['3', '4', '5'])
+
+    def perRowFunction(row):
+        if row[0] == '0':
+            row[0] = '10'
+        return row
+
+    h.modifyAllRows(perRowFunction)
+    assert h.rows[0] == ['10', '1', '2']
+    assert h.rows[1] == ['3', '4', '5']

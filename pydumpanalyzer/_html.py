@@ -65,11 +65,10 @@ class HtmlTable(object):
 
         results = cursor.fetchall()
         if not results:
-            logger.error("Empty results from valid cursor")
-            return False
+            logger.warning("Empty results from valid cursor")
 
-        keys = results[0]._fields
-        retTable = HtmlTable(tableHeaders=keys, name=name, addSearch=addSearch, classes=classes)
+        tableHeaders = [a[0] for a in cursor.description]
+        retTable = HtmlTable(tableHeaders=tableHeaders, name=name, addSearch=addSearch, classes=classes)
         for result in results:
             retTable.addRow(list(result))
 
@@ -83,6 +82,12 @@ class HtmlTable(object):
 
         self.rows.append(row)
 
+    def modifyAllRows(self, func):
+        ''' will go through all rows and call the given function on each row.
+        The function should return the modified version of the row to replace in the table'''
+        for idx, row in enumerate(self.rows):
+            self.rows[idx] = func(row)
+
     def __html__(self):
         ''' general purpose to-html method for this table '''
         searchCode = ''
@@ -94,12 +99,15 @@ class HtmlTable(object):
             headerText += '<th>%s</th>\n' % (row)
         headerText += '</tr>\n'
 
-        rowText = ''
-        for row in self.rows:
-            rowText += '<tr>\n'
-            for colIdx, value in enumerate(row):
-                rowText += '<td>%s</td>\n' % (value)
-            rowText += '</tr>\n'
+        if self.rows:
+            rowText = ''
+            for row in self.rows:
+                rowText += '<tr>\n'
+                for colIdx, value in enumerate(row):
+                    rowText += '<td>%s</td>\n' % (value)
+                rowText += '</tr>\n'
+        else:
+            rowText = '... Table is empty (no rows)'
 
         tableContent = TABLE_CONTENT.format(id=self.id, rows=rowText, headers=headerText, classes=self.classes)
 

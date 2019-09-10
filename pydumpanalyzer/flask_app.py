@@ -12,11 +12,12 @@ import pickle
 
 import flask
 import flask_selfdoc
+from werkzeug.exceptions import HTTPException
 
 import __version__
 import _html
 import utility
-from csmlog_setup import getLogger
+from csmlog_setup import enableConsoleLogging, getLogger
 from storage import Storage
 
 CACHED_ANALYSIS_FILE_NAME = 'analysis.pickle'
@@ -26,6 +27,7 @@ WINDOWS_SYMBOLS_LOCATION = os.path.join(ROOT_STORAGE_LOCATION, "WindowsSymbols")
 
 app = flask.Flask("PyDumpAnalyzerFlaskApp")
 auto = flask_selfdoc.Autodoc(app)
+logger = getLogger(__file__)
 
 class WEBPAGES_NAVBAR(enum.Enum):
     ''' enum with all top level web pages for the navbar '''
@@ -36,6 +38,7 @@ class WEBPAGES_NOT_NAVBAR(enum.Enum):
     ''' enum with all outward web pages. Ones that are in here,
     but not in WEBPAGES_NAVBAR are not shown in the navbar '''
     Home = '/'
+    View_Table = '/show/table/<tableName>'
 
 WEBPAGES = enum.Enum('WEBPAGES', [(i.name, i.value) for i in itertools.chain(WEBPAGES_NAVBAR, WEBPAGES_NOT_NAVBAR)])
 
@@ -63,14 +66,38 @@ def home():
         cursor = storage.database.execute("SELECT Name FROM Applications")
         table = _html.HtmlTable.fromCursor(cursor, classes='content', name="Applications")
 
-    if table:
-        pass
-        # add links to the view the Application's tables
-    else:
+    if not table:
         table = '<p>No applications have reported back to PDA... yet!</p>'
+    else:
+        table.modifyAllRows(lambda row: [_html.getHtmlLinkString(flask.url_for('viewTable', tableName=row[0]), row[0])])
 
     return flask.render_template('home.html', html_content=table)
+
+@app.route(WEBPAGES.View_Table.value, methods=['GET'])
+@auto.doc()
+def viewTable(tableName):
+    ''' used to give back a view of the given database table '''
+    with Storage() as storage:
+        if storage.database.tableExists(tableName):
+            cursor = storage.database.execute("SELECT * FROM %s" % tableName)
+            table = _html.HtmlTable.fromCursor(cursor, classes='content', name=tableName)
+        else:
+            logger.warning("User requested table (%s) which does not exist" % tableName)
+            table = None
+
+    if table:
+        return flask.render_template('table_view.html', table_content=table, title=tableName)
+    else:
+        flask.abort(404)
+
+@app.errorhandler(Exception)
+def error_handler(e):
+    ''' this will handle all http errors we may encounter with a custom template '''
+    logger.error("Giving back an error: %s\n... that error was encountered serving: %s" % (str(e), flask.request.path))
+    return flask.render_template('error.html', code=e.code, errString=str(e)), e.code
 
 if __name__ == '__main__':
     app.url_map.strict_slashes = False
     app.run()
+    enableConsoleLogging()
+

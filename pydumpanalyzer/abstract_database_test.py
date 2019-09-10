@@ -3,8 +3,10 @@
 import os
 import unittest
 
+import pytest
+
+from abstract_database import AbstractDatabase, Column, SqlStatementUnsafeException
 from csmlog_setup import getLogger
-from abstract_database import Column, AbstractDatabase
 
 logger = getLogger(__file__)
 
@@ -139,3 +141,9 @@ class TestAbstractDatabase(unittest.TestCase):
         with AbstractDatabase(':memory:') as m:
             assert m.createTable('Table2', [])
             assert m.tableExists('Table2')
+
+    def test_no_sql_chaining(self):
+        ''' ensures we can't chain together sql commands '''
+        self.database.open()
+        with pytest.raises(SqlStatementUnsafeException):
+            self.database.execute('SELECT * FROM Apps;DROP TABLE *')

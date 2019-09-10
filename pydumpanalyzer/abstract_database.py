@@ -16,6 +16,10 @@ def _rowToNamedTuple(cursor, row):
     Row = collections.namedtuple("Row", fields)
     return Row(*row)
 
+class SqlStatementUnsafeException(Exception):
+    ''' exception to say the query did not look safe to execute '''
+    pass
+
 class AbstractDatabase(object):
     '''
     wrapper for working with the application database
@@ -58,8 +62,16 @@ class AbstractDatabase(object):
             self.database.close()
             self.database = None
 
+    @classmethod
+    def _ensureSqlStatementSafe(cls, sqlStatement):
+        ''' not great sql injection protection '''
+        if ';' in sqlStatement:
+            raise SqlStatementUnsafeException("%s is not safe due to having a semicolon" % sqlStatement)
+
     def execute(self, sqlStatement):
         ''' executes the given sqlStatement, wants to return a cursor '''
+        self._ensureSqlStatementSafe(sqlStatement)
+
         logger.info("Executing: %s" % sqlStatement)
         try:
             cursor = self.database.execute(sqlStatement)
