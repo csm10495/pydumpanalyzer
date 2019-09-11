@@ -31,12 +31,12 @@ logger = getLogger(__file__)
 
 class WEBPAGES_NAVBAR(enum.Enum):
     ''' enum with all top level web pages for the navbar '''
-    #Crashes = '/show/crashes/' # not ported yet
     API_Docs = '/show/apidocs/'
 
 class WEBPAGES_NOT_NAVBAR(enum.Enum):
     ''' enum with all outward web pages. Ones that are in here,
     but not in WEBPAGES_NAVBAR are not shown in the navbar '''
+    Add_Item = '/add'
     Home = '/'
     View_Table = '/show/table/<tableName>'
 
@@ -95,6 +95,28 @@ def error_handler(e):
     ''' this will handle all http errors we may encounter with a custom template '''
     logger.error("Giving back an error: %s\n... that error was encountered serving: %s" % (str(e), flask.request.path))
     return flask.render_template('error.html', code=e.code, errString=str(e)), e.code
+
+@app.route(WEBPAGES.Add_Item.value, methods=['POST'])
+def addHandler()
+    ''' this handler is called when an item is being added via a POST request. A single call to this API shall not have unrelated Symbols/Executable/CrashDump files.
+        In other words, do not give an Execuable that isn't related to the given Symbols file. Do seperate API calls for unrelated files.
+
+    Required form-data Body Fields:
+    OperatingSystem: String: (Should be "Windows")
+    Application:     String: The name of the application this addition is related to
+
+    At least one of the following is also required:
+    SymbolsFile:     File: Symbols file for the application (On Windows a .pdb file can be given)
+    ExecutableFile:  File: The executable to be debugged later (Can be a .exe, .dll, etc.)
+    CrashDumpFile:   File: The dump file to be analyzed. (On Windows, the crash dump can be sent at a different time from the ExecutableFile and SymbolsFile)
+
+    Optional form-data Body Fields:
+    ApplicationVersion: String: Version for the application
+    Tag:                String: Arbitrary tag for this upload. (Can be used for later filtering)
+    '''
+    with Storage() as storage:
+        return storage.addFromAddRequest(flask.request)
+
 
 if __name__ == '__main__':
     app.url_map.strict_slashes = False
