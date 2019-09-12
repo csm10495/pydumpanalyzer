@@ -21,7 +21,7 @@ def getUniqueTableName():
     return 'table_' + uid.replace('-', '')
 
 @contextlib.contextmanager
-def temporaryFilePath():
+def temporaryFilePath(delete=True):
     ''' yields a path we can use for temp files... will attempt to delete it after use '''
     path = None
     while True:
@@ -31,10 +31,15 @@ def temporaryFilePath():
     try:
         yield path
     finally:
-        if os.path.isfile(path):
-            os.remove(path)
-        elif os.path.isdir(path):
-            shutil.rmtree(path, ignore_errors=True)
+        if delete:
+            if os.path.isfile(path):
+                os.remove(path)
+            elif os.path.isdir(path):
+                shutil.rmtree(path, ignore_errors=True)
+
+def textToSafeHtmlText(s):
+    ''' coerces a string into html-safe text '''
+    return s.replace('\n', '<br>').replace(' ', '&nbsp;')
 
 def zipDirectoryToBytesIo(directory):
     ''' zips a directory and returns a io.BytesIO object '''

@@ -130,6 +130,24 @@ class Storage(object):
             return result.Name
         return False
 
+    def getApplicationCell(self, applicationName, rowUid, column):
+        ''' finds the application database, then goes to a specific row and returns the given column '''
+        tableName = self.getApplicationTableName(applicationName)
+        if not tableName:
+            logger.warning("Application doesn't exist")
+            return False
+
+        result = self.database.execute("SELECT * FROM `%s` WHERE UID=\"%s\"" % (tableName, rowUid)).fetchone()
+        if not result:
+            logger.warning("UID didn't exist: %s" % rowUid)
+            return False
+
+        if not hasattr(result, column):
+            logger.warning("Column %s doesn't exist" % column)
+            return False
+
+        return getattr(result, column)
+
     def addFromAddRequest(self, request):
         ''' called by the flask app to add something for the given request to addHandler
         Note that this will return the status that will be returned by addHandler() '''

@@ -2,5 +2,5 @@
 
 {% block content %}
     <h1 class="content">Error: {{ code }}</h1>
-    <p class="content">{{ errString }} <br> &nbsp;&nbsp;&nbsp;... that's all we know.</p>
+    <p class="content">{{ errString|safe }} <br> &nbsp;&nbsp;&nbsp;... that's all we know.</p>
 {% endblock %}

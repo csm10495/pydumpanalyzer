@@ -6,6 +6,7 @@
 '''
 import datetime
 import enum
+import io
 import itertools
 import os
 import pickle
@@ -40,6 +41,7 @@ class WEBPAGES_NOT_NAVBAR(enum.Enum):
     Add_Item = '/add'
     Home = '/'
     View_Application_Table = '/show/application_table/<applicationName>'
+    Get_File = '/get/file/<applicationName>/<rowUid>/<column>'
 
 WEBPAGES = enum.Enum('WEBPAGES', [(i.name, i.value) for i in itertools.chain(WEBPAGES_NAVBAR, WEBPAGES_NOT_NAVBAR)])
 
@@ -85,7 +87,8 @@ def viewApplicationTable(applicationName):
             table = None
 
     if table:
-        table.removeColumns(['UID', 'SymbolsFile', 'ExecutableFile', 'CrashDumpFile'])
+        # please hide the blob columns.
+        table.removeColumns(['SymbolsFile', 'ExecutableFile', 'CrashDumpFile'])
         return flask.render_template('table_view.html', table_content=table, title=applicationName)
     else:
         flask.abort(404)
@@ -103,9 +106,28 @@ def error_handler(e):
             txt = "Unknown Error"
 
         logger.error(txt)
-        return flask.render_template('error.html', code=400, errString=txt), 400
+        return flask.render_template('error.html', code=400, errString=utility.textToSafeHtmlText(txt)), 400
 
     return flask.render_template('error.html', code=e.code, errString=str(e)), e.code
+
+@app.route(WEBPAGES.Get_File.value, methods=['GET'])
+def getFile(applicationName, rowUid, column):
+    ''' this handler is not documented for external use.
+    From applicationName, rowUid, column (name) we can get the blob assoicated '''
+    with Storage() as s:
+        blob = s.getApplicationCell(applicationName, rowUid, column)
+        if not blob:
+            flask.abort(404)
+
+        # if we can get the 'real name', use it
+        fileName = None
+        if column in ('SymbolsFile', 'ExecutableFile', 'CrashDumpFile'):
+            fileName = s.getApplicationCell(applicationName, rowUid, column + "Name")
+
+    if isinstance(blob, str):
+        blob = blob.encode()
+
+    return flask.send_file(io.BytesIO(blob), as_attachment=True, attachment_filename=fileName)
 
 @app.route(WEBPAGES.Add_Item.value, methods=['POST'])
 @auto.doc()
