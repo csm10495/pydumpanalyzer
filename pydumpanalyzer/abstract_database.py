@@ -68,22 +68,22 @@ class AbstractDatabase(object):
         if ';' in sqlStatement:
             raise SqlStatementUnsafeException("%s is not safe due to having a semicolon" % sqlStatement)
 
-    def execute(self, sqlStatement):
+    def execute(self, sqlStatement, *args):
         ''' executes the given sqlStatement, wants to return a cursor '''
         self._ensureSqlStatementSafe(sqlStatement)
 
         logger.info("Executing: %s" % sqlStatement)
         try:
-            cursor = self.database.execute(sqlStatement)
+            cursor = self.database.execute(sqlStatement, *args)
             return cursor
         except Exception as ex:
             logger.error("Got an exception executing: %s" % str(ex))
             raise
 
-    def booleanExecute(self, sqlStatement):
+    def booleanExecute(self, sqlStatement, *args):
         ''' calls execute() but returns True if any cursor comes back, False otherwise '''
         try:
-            self.execute(sqlStatement)
+            self.execute(sqlStatement, *args)
             logger.info("Successfully executed: %s" % sqlStatement)
             return True
         except Exception as ex:
@@ -97,7 +97,7 @@ class AbstractDatabase(object):
                 Useful: .name/ .type within those tuples.
         '''
         if self.tableExists(tableName):
-            return self.execute('PRAGMA table_info(%s)' % tableName).fetchall()
+            return self.execute('PRAGMA table_info(`%s`)' % tableName).fetchall()
 
         return False
 
@@ -119,7 +119,7 @@ class AbstractDatabase(object):
         ''' goes to a given table and ensures that the given columns (list of Column) exist in the given table '''
         tableInfo = self.getTableInfo(tableName)
         if not tableInfo:
-            logger.error("Could not get table info for table: %s" % tableInfo)
+            logger.error("Could not get table info for table: %s" % tableName)
             return False
 
         for col in columns:
@@ -137,7 +137,9 @@ class AbstractDatabase(object):
 
     def addRow(self, tableName, rowAsDict):
         ''' adds the given dict of column name -> value to the given table '''
-        sqlStatement = 'INSERT INTO {tableName} ({keys}) VALUES ({values})'.format(tableName=tableName,
-                                                                                   keys=','.join(list(rowAsDict.keys())),
-                                                                                   values=','.join(map(lambda x: '"' + str(x) + '"', list(rowAsDict.values()))))
-        return self.booleanExecute(sqlStatement)
+        sqlStatement = '''INSERT INTO `{tableName}` ({keys}) VALUES ({valuesAsQuestionMarks})'''.format(
+            tableName=tableName,
+            keys=','.join('`%s`' % a for a in list(rowAsDict.keys())),
+            valuesAsQuestionMarks=','.join(['?'] * len(rowAsDict))
+        )
+        return self.booleanExecute(sqlStatement, list(rowAsDict.values()))

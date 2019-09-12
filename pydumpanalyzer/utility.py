@@ -15,6 +15,11 @@ def getUniqueId():
     ''' gets a unique id string '''
     return str(uuid.uuid4())
 
+def getUniqueTableName():
+    ''' gets a psuedo random name for a table '''
+    uid = getUniqueId()
+    return 'table_' + uid.replace('-', '')
+
 @contextlib.contextmanager
 def temporaryFilePath():
     ''' yields a path we can use for temp files... will attempt to delete it after use '''

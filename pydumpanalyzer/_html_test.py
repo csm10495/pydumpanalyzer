@@ -87,3 +87,21 @@ def test_modifying_all_rows():
     h.modifyAllRows(perRowFunction)
     assert h.rows[0] == ['10', '1', '2']
     assert h.rows[1] == ['3', '4', '5']
+
+def test_hiding_columns():
+    ''' ensures we can hide columns '''
+    h = HtmlTable(['A', 'B', 'C'])
+    h.addRow(['0', '9999', '2'])
+    h.addRow(['3', '4444', '5'])
+
+    assert 'B' in h.__html__()
+    assert '9999' in h.__html__()
+    assert '4444' in h.__html__()
+    assert len(h.tableHeaders) == 3
+
+    h.removeColumns(['B'])
+
+    assert 'B' not in h.__html__()
+    assert '9999' not in h.__html__()
+    assert '4444' not in h.__html__()
+    assert len(h.tableHeaders) == 2

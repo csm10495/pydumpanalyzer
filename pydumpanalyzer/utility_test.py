@@ -1,7 +1,7 @@
 ''' this is where we have tests for utilities '''
 import os
 
-from utility import getUniqueId, temporaryFilePath, zipDirectoryToBytesIo
+from utility import getUniqueId, getUniqueTableName, temporaryFilePath, zipDirectoryToBytesIo
 
 def test_unique_id():
     ''' makes sure we get unique ids on each getUniqueId() call '''
@@ -10,6 +10,20 @@ def test_unique_id():
         uids.add(getUniqueId())
 
     assert len(uids) == 100
+
+def test_unique_table_name():
+    ''' makes sure we get a unique table name '''
+    names = set()
+    for i in range(100):
+        names.add(getUniqueTableName())
+
+    assert len(names) == 100
+
+    # make sure it doesn't have a - or . and does not start with a number
+    for i in names:
+        assert i[0] not in [0,1,2,3,4,5,6,7,8,9]
+        assert '-' not in i
+        assert '.' not in i
 
 def test_temp_file_path_with_a_file():
     ''' ensures temporaryFilePaths() can be created and delete appropriately with a file '''

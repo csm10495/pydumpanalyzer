@@ -1,5 +1,6 @@
 ''' home for unit tests for the flask app'''
 
+import io
 import os
 import sys
 import unittest
@@ -11,6 +12,15 @@ from csmlog_setup import getLogger
 from storage import DATABASE_FILE, Storage
 
 logger = getLogger(__file__)
+
+class MockRequest(object):
+    ''' mocked out flask request object. '''
+    def __init__(self, files, form):
+        self.files = files # dict
+        for v in self.files.values():
+            v.filename = 'filename'
+        self.form = form # dict
+        self.remote_addr = '127.0.0.1'
 
 def url_for_ish(s, **kwargs):
     ''' sort of like url_for from flask, except you give a string and kwargs of replacements to make '''
@@ -65,7 +75,7 @@ class TestFlaskApp(unittest.TestCase):
 
     def test_show_nonexistant_table(self):
         ''' ensures a nonexistant table can be failed with a 404 '''
-        result = self.app.get(url_for_ish(self.WEBPAGES.View_Table, tableName="notrealtable"))
+        result = self.app.get(url_for_ish(self.WEBPAGES.View_Application_Table, applicationName="notrealtable"))
         assert result.status_code == 404
 
     def test_show_empty_table(self):
@@ -73,14 +83,24 @@ class TestFlaskApp(unittest.TestCase):
         with Storage() as storage:
             storage.applicationAdd('MyApp')
 
-        #result = self.app.get('/view_table/MyApp')
-        result = self.app.get(url_for_ish(self.WEBPAGES.View_Table, tableName="MyApp"))
+        result = self.app.get(url_for_ish(self.WEBPAGES.View_Application_Table, applicationName="MyApp"))
         assert result.status_code == 200
         assert 'Table is empty' in result.data.decode()
 
-    """
     def test_show_table(self):
         ''' ensures a nonempty table can be shown '''
-        # todo (since right now there isn't an api to add to an app table)
-    """
+        request = MockRequest({
+            'SymbolsFile' : io.BytesIO(b'abcdefghijklmnopqrstuvwxyz')
+        }, {
+            'Application' : 'MyApp',
+            'OperatingSystem' : 'Windows',
+            'Tag' : 'MyTag17',
+        })
 
+        with Storage() as storage:
+            storage.applicationAdd('MyApp')
+            storage.addFromAddRequest(request)
+
+        result = self.app.get(url_for_ish(self.WEBPAGES.View_Application_Table, applicationName="MyApp"))
+        assert result.data.decode().count('MyTag17') == 1
+        assert result.status_code == 200

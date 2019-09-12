@@ -88,6 +88,22 @@ class HtmlTable(object):
         for idx, row in enumerate(self.rows):
             self.rows[idx] = func(row)
 
+    def removeColumns(self, columnNames):
+        ''' hides the given columns (by header name) from the table (by removing respective cells) '''
+        if not isinstance(columnNames, (list, tuple)):
+            columnNames = [columnNames]
+
+        indexes = sorted([self.tableHeaders.index(c) for c in columnNames], reverse=True)
+
+        def deleter(row):
+            ''' deletes calculated indexes from the given row '''
+            for idx in indexes:
+                del row[idx]
+            return row
+
+        deleter(self.tableHeaders)
+        self.modifyAllRows(deleter)
+
     def __html__(self):
         ''' general purpose to-html method for this table '''
         searchCode = ''
