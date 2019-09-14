@@ -42,6 +42,8 @@ APPLICATION_UPLOADS_COLUMNS = [
     Column('CrashDumpFileName'  , 'TEXT'), # name of crash dump file
 ]
 
+logger = getLogger(__file__)
+
 class SupportedOperatingSystems(enum.Enum):
     ''' enum for all operating systems supported '''
     WINDOWS = "Windows"
@@ -55,8 +57,6 @@ class SupportedOperatingSystems(enum.Enum):
     def getValues(cls):
         ''' gets a list of values for this enum '''
         return [v.value for v in cls.__members__.values()]
-
-logger = getLogger(__file__)
 
 class Storage(object):
     ''' object that keeps track of the various storage needed by this object '''

@@ -77,6 +77,8 @@ def home():
 @app.route(WEBPAGES.View_Application_Table.value, methods=['GET'])
 def viewApplicationTable(applicationName):
     ''' used to give back a view of the given database table '''
+
+    # todo.. i think this whole function's body should likely be in storage.py
     with Storage() as storage:
         tableName = storage.getApplicationTableName(applicationName)
         if tableName:
@@ -86,12 +88,23 @@ def viewApplicationTable(applicationName):
             logger.warning("User requested application (%s) which doesn't have a matching table" % applicationName)
             table = None
 
-    if table:
-        # please hide the blob columns.
-        table.removeColumns(['SymbolsFile', 'ExecutableFile', 'CrashDumpFile'])
-        return flask.render_template('table_view.html', table_content=table, title=applicationName)
-    else:
-        flask.abort(404)
+        if table:
+            def getLinks(row):
+                ''' helper to get links to files in the current table '''
+                rowUid = row[table.tableHeaders.index("UID")]
+                for columnName in 'SymbolsFile', 'ExecutableFile', 'CrashDumpFile':
+                    url = flask.url_for("getFile", applicationName=applicationName, rowUid=rowUid, column=columnName)
+                    index = table.tableHeaders.index(columnName)
+                    cellValue = storage.getApplicationCell(applicationName, rowUid, columnName + "Name")
+                    if cellValue:
+                        row[index] = _html.getHtmlLinkString(url, cellValue)
+                return row
+            table.modifyAllRows(getLinks)
+            table.removeColumns(['SymbolsFileName', 'ExecutableFileName', 'CrashDumpFileName'])
+
+            return flask.render_template('table_view.html', table_content=table, title=applicationName)
+        else:
+            flask.abort(404)
 
 @app.errorhandler(Exception)
 def error_handler(e):

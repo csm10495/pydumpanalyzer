@@ -104,6 +104,11 @@ class HtmlTable(object):
         deleter(self.tableHeaders)
         self.modifyAllRows(deleter)
 
+    def getCellFromRow(self, row, columnName):
+        ''' gets a given cell from a row and the desired columnName '''
+        idx = self.tableHeaders.index(columnName)
+        return row[idx]
+
     def __html__(self):
         ''' general purpose to-html method for this table '''
         searchCode = ''

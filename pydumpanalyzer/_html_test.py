@@ -105,3 +105,12 @@ def test_hiding_columns():
     assert '9999' not in h.__html__()
     assert '4444' not in h.__html__()
     assert len(h.tableHeaders) == 2
+
+def test_cell_from_row():
+    ''' ensures we can get the given cell from a row/columName '''
+    h = HtmlTable(['A', 'B', 'C'])
+    h.addRow(['0', '9999', '2'])
+    h.addRow(['3', '4444', '5'])
+
+    assert h.getCellFromRow(h.rows[0], 'C') == '2'
+    assert h.getCellFromRow(h.rows[1], 'B') == '4444'
