@@ -9,6 +9,19 @@ def getHtmlLinkString(url, text):
     ''' given a url/text returns an a '''
     return r'<a href="%s">%s</a>' % (url, text)
 
+def getDropLeft(title, textCommaLinks):
+    ''' returns text for a bootstrap 4 dropleft '''
+    return r'''
+    <div class="dropleft">
+        <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            %s
+        </button>
+        <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+            %s
+        </div>
+    </div>
+    ''' % (title, ('\n'.join([('<a class="dropdown-item" href="%s">%s</a>' % (val[1], val[0])) for val in textCommaLinks])))
+
 SEARCH_CODE = '''
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
 <script>
@@ -109,6 +122,11 @@ class HtmlTable(object):
         idx = self.tableHeaders.index(columnName)
         return row[idx]
 
+    def addColumn(self, headerName):
+        ''' add a column to the table (with a given name) '''
+        self.tableHeaders.append(headerName)
+        self.modifyAllRows(lambda row: row + [None])
+
     def __html__(self):
         ''' general purpose to-html method for this table '''
         searchCode = ''
@@ -122,7 +140,7 @@ class HtmlTable(object):
 
         if self.rows:
             rowText = ''
-            for row in self.rows:
+            for row in reversed(self.rows):
                 rowText += '<tr>\n'
                 for colIdx, value in enumerate(row):
                     rowText += '<td>%s</td>\n' % (value)

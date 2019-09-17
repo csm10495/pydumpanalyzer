@@ -28,6 +28,7 @@ def test_unique_table_name():
 def test_safe_html():
     ''' ensures our safe text method works '''
     assert textToSafeHtmlText('\n ') == '<br>&nbsp;'
+    assert textToSafeHtmlText('<>\n') == '&lt;&gt;<br>'
 
 def test_temp_file_path_with_a_file():
     ''' ensures temporaryFilePaths() can be created and delete appropriately with a file '''
@@ -40,6 +41,33 @@ def test_temp_file_path_with_a_file():
         assert os.path.isfile(t)
 
     assert not os.path.exists(testPath)
+
+def test_temp_file_with_name():
+    ''' ensures we can get a temp file with a name '''
+    testPath = None
+    with temporaryFilePath(fileName='myfile') as t:
+        testPath = t
+        assert not os.path.exists(t)
+        assert t.endswith('myfile')
+        with open(t, 'w') as f:
+            f.write("Hey")
+
+    assert not os.path.exists(testPath)
+
+def test_temp_file_with_name_delete_off():
+    ''' ensures we can get a temp file with a name and delete being False '''
+    testPath = None
+    with temporaryFilePath(fileName='myfile', delete=False) as t:
+        testPath = t
+        assert not os.path.exists(t)
+        assert t.endswith('myfile')
+        with open(t, 'w') as f:
+            f.write("Hey")
+
+    assert os.path.isfile(testPath)
+
+    os.remove(testPath)
+    os.rmdir(os.path.dirname(testPath))
 
 def test_temp_file_path_with_a_directory():
     ''' ensures temporaryFilePaths() can be created and delete appropriately with a folder '''

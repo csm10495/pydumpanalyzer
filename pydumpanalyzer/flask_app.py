@@ -41,7 +41,9 @@ class WEBPAGES_NOT_NAVBAR(enum.Enum):
     Add_Item = '/add'
     Home = '/'
     View_Application_Table = '/show/application_table/<applicationName>'
+    Get_Analysis = '/get/analysis/<applicationName>/<rowUid>'
     Get_File = '/get/file/<applicationName>/<rowUid>/<column>'
+    Get_Windows_Symbols = '/get/windows/symbols/<path:path>'
 
 WEBPAGES = enum.Enum('WEBPAGES', [(i.name, i.value) for i in itertools.chain(WEBPAGES_NAVBAR, WEBPAGES_NOT_NAVBAR)])
 
@@ -77,51 +79,9 @@ def home():
 @app.route(WEBPAGES.View_Application_Table.value, methods=['GET'])
 def viewApplicationTable(applicationName):
     ''' used to give back a view of the given database table '''
-
-    # todo.. i think this whole function's body should likely be in storage.py
     with Storage() as storage:
-        tableName = storage.getApplicationTableName(applicationName)
-        if tableName:
-            cursor = storage.database.execute("SELECT * FROM %s" % tableName)
-            table = _html.HtmlTable.fromCursor(cursor, classes='content', name=applicationName)
-        else:
-            logger.warning("User requested application (%s) which doesn't have a matching table" % applicationName)
-            table = None
-
-        if table:
-            def getLinks(row):
-                ''' helper to get links to files in the current table '''
-                rowUid = row[table.tableHeaders.index("UID")]
-                for columnName in 'SymbolsFile', 'ExecutableFile', 'CrashDumpFile':
-                    url = flask.url_for("getFile", applicationName=applicationName, rowUid=rowUid, column=columnName)
-                    index = table.tableHeaders.index(columnName)
-                    cellValue = storage.getApplicationCell(applicationName, rowUid, columnName + "Name")
-                    if cellValue:
-                        row[index] = _html.getHtmlLinkString(url, cellValue)
-                return row
-            table.modifyAllRows(getLinks)
-            table.removeColumns(['SymbolsFileName', 'ExecutableFileName', 'CrashDumpFileName'])
-
-            return flask.render_template('table_view.html', table_content=table, title=applicationName)
-        else:
-            flask.abort(404)
-
-@app.errorhandler(Exception)
-def error_handler(e):
-    ''' this will handle all http errors we may encounter with a custom template '''
-    logger.error("Giving back an error: %s\n... that error was encountered serving: %s" % (str(e), flask.request.path))
-
-    # if an assertion gets here, it means something has gone very wrong.
-    if not hasattr(e, 'code'):
-        try:
-            txt = "Unknown Error made it to the error handler: " + traceback.format_exc()
-        except:
-            txt = "Unknown Error"
-
-        logger.error(txt)
-        return flask.render_template('error.html', code=400, errString=utility.textToSafeHtmlText(txt)), 400
-
-    return flask.render_template('error.html', code=e.code, errString=str(e)), e.code
+        table = storage.getApplicationTable(applicationName)
+        return flask.render_template('table_view.html', table_content=table, title=applicationName)
 
 @app.route(WEBPAGES.Get_File.value, methods=['GET'])
 def getFile(applicationName, rowUid, column):
@@ -141,6 +101,33 @@ def getFile(applicationName, rowUid, column):
         blob = blob.encode()
 
     return flask.send_file(io.BytesIO(blob), as_attachment=True, attachment_filename=fileName)
+
+@app.route(WEBPAGES.Get_Analysis.value, methods=['GET'])
+def getAnalysis(applicationName, rowUid):
+    ''' will get back an analysis page based off the given application name and uid.
+    Optionally the useCache param may be used. By default it is True. If False is given, cache will be
+    removed, then analysis regenerated for the given uid's crash dump '''
+    useCache = True if flask.request.args.get('useCache', default="True", type=str) == "True" else False
+    with Storage() as storage:
+        analysis = storage.getAnalysis(applicationName, rowUid, useCache)
+        return flask.render_template('analysis.html', analysis=utility.textToSafeHtmlText(str(analysis)), title="Analysis", uuid=rowUid, application=applicationName)
+
+@app.errorhandler(Exception)
+def error_handler(e):
+    ''' this will handle all http errors we may encounter with a custom template '''
+    logger.error("Giving back an error: %s\n... that error was encountered serving: %s" % (str(e), flask.request.path))
+
+    # if an assertion gets here, it means something has gone very wrong.
+    if not hasattr(e, 'code'):
+        try:
+            txt = "Unknown Error made it to the error handler: " + traceback.format_exc()
+        except:
+            txt = "Unknown Error"
+
+        logger.error(txt)
+        return flask.render_template('error.html', code=400, errString=utility.textToSafeHtmlText(txt)), 400
+
+    return flask.render_template('error.html', code=e.code, errString=str(e)), e.code
 
 @app.route(WEBPAGES.Add_Item.value, methods=['POST'])
 @auto.doc()
@@ -164,8 +151,24 @@ def addHandler():
     with Storage() as storage:
         return storage.addFromAddRequest(flask.request)
 
+@app.route(WEBPAGES.Get_Windows_Symbols.value, methods=['GET'])
+@auto.doc()
+def getWindowsSymbols(path):
+    ''' This endpoint can be used as a Windows Symbol server for all Windows executables and symbols files.
+    For information on Symbol Stores/Servers from Microsoft, check: https://docs.microsoft.com/en-us/windows/win32/debug/using-symsrv'''
+    with Storage() as storage:
+        return storage.getWindowsSymbolFile(path)
+
 if __name__ == '__main__':
     app.url_map.strict_slashes = False
     enableConsoleLogging()
     app.run()
 
+'''
+TODO:
+
+The following are missing Unit Tests:
+* getFile
+* getAnalysis
+* getWindowsSymbols
+'''

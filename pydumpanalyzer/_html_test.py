@@ -11,6 +11,14 @@ def test_html_link_string():
     TXT = 'Google'
     assert getHtmlLinkString(URL, TXT) == r'<a href="%s">%s</a>' % (URL, TXT)
 
+def test_drop_left_string():
+    ''' ensures getDropLeft works as expected '''
+    txt = getDropLeft('TITLE', [('TEXT', 'http://LINK'),])
+    assert txt.count('TITLE') == 1
+    assert txt.count('TEXT') == 1
+    assert txt.count('http://LINK') == 1
+    assert txt.count('"') % 2 == 0
+
 def test_invalid_html_table_row():
     ''' ensures that a row with the incorrect number of columns raises properly '''
     table = HtmlTable(['A', 'B', 'C'])
@@ -114,3 +122,15 @@ def test_cell_from_row():
 
     assert h.getCellFromRow(h.rows[0], 'C') == '2'
     assert h.getCellFromRow(h.rows[1], 'B') == '4444'
+
+def test_add_column():
+    ''' ensures we can get the given cell from a row/columName '''
+    h = HtmlTable(['A', 'B', 'C'])
+    h.addRow(['0', '9999', '2'])
+    h.addRow(['3', '4444', '5'])
+
+    h.addColumn('D')
+    assert len(h.tableHeaders) == 4
+    assert h.tableHeaders[-1] == 'D'
+    for i in h.rows:
+        assert len(i) == 4

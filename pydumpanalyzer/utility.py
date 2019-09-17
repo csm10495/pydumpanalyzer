@@ -21,25 +21,29 @@ def getUniqueTableName():
     return 'table_' + uid.replace('-', '')
 
 @contextlib.contextmanager
-def temporaryFilePath(delete=True):
-    ''' yields a path we can use for temp files... will attempt to delete it after use '''
-    path = None
+def temporaryFilePath(delete=True, fileName=None):
+    ''' yields a path we can use for temp files... will attempt to delete it after use.
+    This function will create a directory in the tempdir to ensure we can use names as we please (and not conflict
+    with other threads, etc.) '''
+    folderPath = None
     while True:
-        path = os.path.join(tempfile.gettempdir(), 'pda_' + getUniqueId())
-        if not os.path.exists(path):
+        folderPath = os.path.join(tempfile.gettempdir(), 'pda_' + getUniqueId())
+        if not os.path.exists(folderPath):
             break
+
+    os.mkdir(folderPath)
+    if fileName is None:
+        fileName = 'pda_' + getUniqueId()
+    path = os.path.join(folderPath, fileName)
     try:
         yield path
     finally:
         if delete:
-            if os.path.isfile(path):
-                os.remove(path)
-            elif os.path.isdir(path):
-                shutil.rmtree(path, ignore_errors=True)
+            shutil.rmtree(folderPath, ignore_errors=True)
 
 def textToSafeHtmlText(s):
     ''' coerces a string into html-safe text '''
-    return s.replace('\n', '<br>').replace(' ', '&nbsp;')
+    return s.replace(' ', '&nbsp;').replace('<', '&lt;').replace('>', '&gt;').replace('\n', '<br>')
 
 def zipDirectoryToBytesIo(directory):
     ''' zips a directory and returns a io.BytesIO object '''

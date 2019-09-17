@@ -1,13 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1 class='content'>Crash Analysis: {{ uuid }} </h1>
+    <h1 class='content'>Crash Analysis: {{ application }} ({{ uuid }}) </h1>
     <hr>
     <font face="courier" >
-        <p class='content'>
-        {% for line in analysis %}
-        {{line}}<br>
-        {% endfor %}
-        </p>
+        <p class="content">{{ analysis|safe }}</p>
     </font>
 {% endblock %}

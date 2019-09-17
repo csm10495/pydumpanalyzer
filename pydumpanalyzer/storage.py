@@ -3,13 +3,16 @@
 import datetime
 import enum
 import os
+import pickle
 import threading
 
 import flask
 
+import _html
 from abstract_database import AbstractDatabase, Column
 from csmlog_setup import getLogger
 from utility import getUniqueId, getUniqueTableName, temporaryFilePath
+from windbg import WinDbg
 from windows_symbol_store import WindowsSymbolStore
 
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -40,6 +43,7 @@ APPLICATION_UPLOADS_COLUMNS = [
     Column('ExecutableFileName' , 'TEXT'), # name of executable file
     Column('CrashDumpFile'      , 'BLOB'), # blob of associated crash dump file
     Column('CrashDumpFileName'  , 'TEXT'), # name of crash dump file
+    Column('CrashDumpAnalysis'  , 'BLOB'), # blob of the crash dump analysis file (pickled)
 ]
 
 logger = getLogger(__file__)
@@ -148,6 +152,105 @@ class Storage(object):
 
         return getattr(result, column)
 
+    def setApplicationCell(self, applicationName, rowUid, column, value):
+        ''' finds the application database, then goes to a specific row and modifies the given column to the given value '''
+        tableName = self.getApplicationTableName(applicationName)
+        if not tableName:
+            logger.warning("Application doesn't exist")
+            return False
+
+        result = self.database.execute("UPDATE `%s` SET `%s` = ? WHERE UID = ?" % (tableName, column), [value, rowUid])
+        if not result:
+            logger.warning("Unable to update cell with row UID: %s" % rowUid)
+            return False
+
+        return True
+
+    def getApplicationTable(self, applicationName):
+        ''' used to get back a view of the given application's table '''
+        tableName = self.getApplicationTableName(applicationName)
+        if not tableName:
+            logger.warning("User requested application (%s) which doesn't have a matching table" % applicationName)
+            flask.abort(404)
+
+        cursor = self.database.execute("SELECT * FROM %s" % tableName)
+        table = _html.HtmlTable.fromCursor(cursor, classes='content', name=applicationName)
+        table.addColumn('Actions')
+
+        def getLinks(row):
+            ''' helper to get links to files in the current table '''
+            rowUid = table.getCellFromRow(row, 'UID')
+            for columnName in 'SymbolsFile', 'ExecutableFile', 'CrashDumpFile':
+                url = flask.url_for("getFile", applicationName=applicationName, rowUid=rowUid, column=columnName)
+                index = table.tableHeaders.index(columnName)
+                cellValue = self.getApplicationCell(applicationName, rowUid, columnName + "Name")
+                if cellValue:
+                    row[index] = _html.getHtmlLinkString(url, cellValue)
+
+            actionRowIdx = table.tableHeaders.index('Actions')
+            row[actionRowIdx] = _html.getDropLeft('...', [
+                ('Show Analysis', flask.url_for('getAnalysis', applicationName=applicationName, rowUid=rowUid, useCache=True)),
+                ('Show Analysis (No Cache)', flask.url_for('getAnalysis', applicationName=applicationName, rowUid=rowUid, useCache=False))
+            ])
+
+            return row
+
+        table.modifyAllRows(getLinks)
+        table.removeColumns(['SymbolsFileName', 'ExecutableFileName', 'CrashDumpFileName', 'CrashDumpAnalysis'])
+
+        return table
+
+    def getAnalysis(self, applicationName, rowUid, useCache=True):
+        ''' internal function called to get the Analysis object for the given rowUid '''
+        if useCache:
+            dataBlob = self.getApplicationCell(applicationName, rowUid, 'CrashDumpAnalysis')
+            if dataBlob:
+                logger.debug("Returning from cache, analysis: %s / %s" % (applicationName, rowUid))
+                try:
+                    return pickle.loads(dataBlob)
+                except Exception as ex:
+                    logger.error("Failed to de-serialize pickle data: %s" % str(ex))
+
+        logger.info("Attempting to generate Analysis for: %s / %s" % (applicationName, rowUid))
+
+        crashDumpBinary = self.getApplicationCell(applicationName, rowUid, 'CrashDumpFile')
+        if not crashDumpBinary:
+            logger.error("Crash dump file was not available with the given uid")
+            flask.abort(404)
+
+        operatingSystem = self.getApplicationCell(applicationName, rowUid, 'OperatingSystem')
+        if not operatingSystem:
+            logger.error("Operating system was not available with the given uid... this should not be possible!")
+            flask.abort(404)
+
+        with temporaryFilePath() as crashDumpBinaryFilePath:
+            with open(crashDumpBinaryFilePath, 'wb') as f:
+                f.write(crashDumpBinary)
+
+            if operatingSystem == SupportedOperatingSystems.WINDOWS.value:
+                debugger = WinDbg(crashDumpBinaryFilePath, WINDOWS_SYMBOL_STORE)
+            else:
+                logger.error("Unsupported OS is somehow in the database")
+                logger.abort(500)
+
+            analysis = debugger.getAnalysis()
+        analysisAsPickledData = pickle.dumps(analysis)
+        if not self.setApplicationCell(applicationName, rowUid, 'CrashDumpAnalysis', analysisAsPickledData):
+            logger.warning("Failed to save off crash dump analysis pickle data.. uid=%s" % rowUid)
+            flask.abort(500)
+
+        return analysis
+
+    def getWindowsSymbolFile(self, path):
+        ''' internal function used to serve back a Windows Symbol Store '''
+        fullPath = os.path.abspath(os.path.join(WINDOWS_SYMBOL_STORE, path))
+
+        # the right side of the and is to make sure that somehow we aren't out of the symbols directory
+        if os.path.isfile(fullPath) and os.path.normpath(WINDOWS_SYMBOL_STORE) in os.path.normpath(fullPath):
+            return flask.send_file(fullPath)
+
+        flask.abort(404)
+
     def addFromAddRequest(self, request):
         ''' called by the flask app to add something for the given request to addHandler
         Note that this will return the status that will be returned by addHandler() '''
@@ -202,7 +305,8 @@ class Storage(object):
         # add objects to symbol store
         if operatingSystem == SupportedOperatingSystems.WINDOWS.value:
             if symbolsFileBinary:
-                with temporaryFilePath() as temp:
+                # additions must have original name (to work in symbol store)
+                with temporaryFilePath(fileName=symbolsFileName) as temp:
                     with open(temp, 'wb') as f:
                         f.write(symbolsFileBinary)
 
@@ -212,7 +316,8 @@ class Storage(object):
                         failAnd401("Failed to add symbols file to store: %s" % str(ex))
 
             if executableFileBinary:
-                with temporaryFilePath() as temp:
+                 # additions must have original name (to work in symbol store)
+                with temporaryFilePath(fileName=executableFileName) as temp:
                     with open(temp, 'wb') as f:
                         f.write(executableFileBinary)
 
@@ -222,8 +327,9 @@ class Storage(object):
                         failAnd401("Failed to add executable file to store: %s" % str(ex))
 
         # add to database
+        uid = getUniqueId()
         if not self.database.addRow(applicationTableName, {
-            'UID' : getUniqueId(),
+            'UID' : uid,
             'Timestamp' : str(datetime.datetime.now()),
             'UploaderIP' : request.remote_addr,
             'OperatingSystem' : operatingSystem,
@@ -235,13 +341,21 @@ class Storage(object):
             'ExecutableFileName' : executableFileName,
             'CrashDumpFile' : crashDumpFileBinary,
             'CrashDumpFileName' : crashDumpFileName,
-            # AnalysisFile is not given here, it can be generated later.
+            # CrashDumpAnalysis is not given here, it can be generated later.
         }):
             failAnd401("Unable to add to database")
 
         # success!
-        return "Successfully added!"
+        return "Successfully added! UID: %s" % uid
 
 
 if __name__ == '__main__':
     s = Storage().__enter__()
+
+'''
+TODO:
+
+The following are missing Unit Tests:
+* getAnalysis()
+* getWindowsSymbolFile()
+'''

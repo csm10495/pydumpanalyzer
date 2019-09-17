@@ -109,6 +109,7 @@ class WinDbg(Debugger):
         if self.executable:
             args.extend(["-i", self.executable])
         try:
+            logger.debug("About to call: %s" % args)
             process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
             deathTime = time.time() + timeout
@@ -123,12 +124,17 @@ class WinDbg(Debugger):
                 process.terminate()
                 raise RuntimeError("Timed out doing this command list: %s" % debugCommandsList)
 
+            fullOutput = ''
+            if os.path.exists(tempFile.name):
+                with open(tempFile.name, 'r') as f:
+                    fullOutput = f.read()
+
             if process.returncode != 0:
+                logger.error("cdb error!\n%s" % fullOutput)
                 raise subprocess.CalledProcessError(process.returncode, args)
 
-            # above will raise on failure!
-            with open(tempFile.name, 'r') as f:
-                fullOutput = f.read()
+            logger.debug("Output:\n%s" % fullOutput)
+
         finally:
             if os.path.isfile(tempFileName):
                 try:

@@ -118,3 +118,34 @@ class TestStorage(unittest.TestCase):
         })
         with Storage() as s:
             assert 'Success' in s.addFromAddRequest(request)
+
+    def test_get_set_application_cell(self):
+        ''' ensures we can get a particular cell for an application '''
+        request = MockRequest({
+            'SymbolsFile' : io.BytesIO(b'abcdefghijklmnopqrstuvwxyz'),
+            'ExecutableFile' : io.BytesIO(b'abcdefghijklmnopqrstuvwxyz'),
+            'CrashDumpFile' : io.BytesIO(b'abcdefghijklmnopqrstuvwxyz'),
+        }, {
+            'Application' : 'MyApp234',
+            'OperatingSystem' : 'Windows',
+            'Tag' : 'TestTag123',
+        })
+        with Storage() as s:
+            msg = s.addFromAddRequest(request)
+            uid = msg.split('UID:')[-1].strip()
+
+            assert s.getApplicationCell('MyApp234', uid, 'Tag') == 'TestTag123'
+            assert s.getApplicationCell('MyApp235', uid, 'Tag') is False
+            assert s.getApplicationCell('MyApp235', uid + '1', 'Tag') is False
+            assert s.getApplicationCell('MyApp234', uid, 'OperatingSystem') == 'Windows'
+            assert s.getApplicationCell('MyApp234', uid, 'OperatingSystem2') is False
+
+            assert s.setApplicationCell('MyApp234', uid, 'Tag', 'NewTag!')
+            assert s.getApplicationCell('MyApp234', uid, 'Tag') == 'NewTag!'
+
+'''
+TODO:
+* Make it so running unit tests doesn't affect the production database
+** Remove direct uses of DATABASE_FILE. Make it a member of Storage.
+** In all unit tests, use a mock Storage that changes the database file to something other than production.
+'''
