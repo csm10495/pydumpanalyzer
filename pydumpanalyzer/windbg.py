@@ -57,7 +57,7 @@ class WinDbg(Debugger):
         if gotoExceptionContext:
             debugCommandsList = ['.ecxr'] + debugCommandsList
 
-        # enable line numbers (since we need to do this to enable them for cdb. windb has this enabled automatically)
+        # enable line numbers (since we need to do this to enable them for cdb. windbg has this enabled automatically)
         # see https://social.msdn.microsoft.com/Forums/en-US/a72dbabf-f8e2-4937-821e-a7ed37d41797/why-is-windbg-and-cdb-show-different-output-when-looking-at-the-stack-for-a-dump-file?forum=vsdebug
         debugCommandsList = ['.symopt+0x10'] + debugCommandsList
 

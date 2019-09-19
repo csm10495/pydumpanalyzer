@@ -93,14 +93,14 @@ def getFile(applicationName, rowUid, column):
             flask.abort(404)
 
         # if we can get the 'real name', use it
-        fileName = None
+        fileName = column
         if column in ('SymbolsFile', 'ExecutableFile', 'CrashDumpFile'):
             fileName = s.getApplicationCell(applicationName, rowUid, column + "Name")
 
     if isinstance(blob, str):
         blob = blob.encode()
 
-    return flask.send_file(io.BytesIO(blob), as_attachment=True, attachment_filename=fileName)
+    return flask.send_file(io.BytesIO(blob), as_attachment=True, attachment_filename=fileName, mimetype='application/x-binary')
 
 @app.route(WEBPAGES.Get_Analysis.value, methods=['GET'])
 def getAnalysis(applicationName, rowUid):
@@ -157,18 +157,9 @@ def getWindowsSymbols(path):
     ''' This endpoint can be used as a Windows Symbol server for all Windows executables and symbols files.
     For information on Symbol Stores/Servers from Microsoft, check: https://docs.microsoft.com/en-us/windows/win32/debug/using-symsrv'''
     with Storage() as storage:
-        return storage.getWindowsSymbolFile(path)
+        return flask.send_file(storage.getWindowsSymbolFilePath(path))
 
 if __name__ == '__main__':
     app.url_map.strict_slashes = False
     enableConsoleLogging()
     app.run()
-
-'''
-TODO:
-
-The following are missing Unit Tests:
-* getFile
-* getAnalysis
-* getWindowsSymbols
-'''

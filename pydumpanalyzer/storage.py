@@ -18,7 +18,6 @@ from windows_symbol_store import WindowsSymbolStore
 THIS_DIR = os.path.abspath(os.path.dirname(__file__))
 ROOT_STORAGE_LOCATION = os.path.join(THIS_DIR, 'storage')
 if not os.path.isdir(ROOT_STORAGE_LOCATION): os.mkdir(ROOT_STORAGE_LOCATION)
-DATABASE_FILE = os.path.join(ROOT_STORAGE_LOCATION, 'database.sqlite')
 WINDOWS_SYMBOL_STORE = os.path.join(ROOT_STORAGE_LOCATION, 'WindowsSymbols')
 
 # the following is the format of tables needed to run
@@ -64,11 +63,12 @@ class SupportedOperatingSystems(enum.Enum):
 
 class Storage(object):
     ''' object that keeps track of the various storage needed by this object '''
+    DATABASE_FILE = os.path.join(ROOT_STORAGE_LOCATION, 'database.sqlite')
     _LOCK = threading.Lock()
     def __enter__(self):
         ''' called when entering via a context manager '''
         Storage._LOCK.acquire()
-        self.database = AbstractDatabase(DATABASE_FILE, commitOnClose=True)
+        self.database = AbstractDatabase(self.DATABASE_FILE, commitOnClose=True)
         self.database.open()
         self.windowsSymbolStore = WindowsSymbolStore(WINDOWS_SYMBOL_STORE)
         self._setupStorage()
@@ -241,13 +241,13 @@ class Storage(object):
 
         return analysis
 
-    def getWindowsSymbolFile(self, path):
-        ''' internal function used to serve back a Windows Symbol Store '''
+    def getWindowsSymbolFilePath(self, path):
+        ''' internal function used to serve back a Windows Symbol Store path '''
         fullPath = os.path.abspath(os.path.join(WINDOWS_SYMBOL_STORE, path))
 
         # the right side of the and is to make sure that somehow we aren't out of the symbols directory
         if os.path.isfile(fullPath) and os.path.normpath(WINDOWS_SYMBOL_STORE) in os.path.normpath(fullPath):
-            return flask.send_file(fullPath)
+            return fullPath
 
         flask.abort(404)
 
@@ -351,11 +351,3 @@ class Storage(object):
 
 if __name__ == '__main__':
     s = Storage().__enter__()
-
-'''
-TODO:
-
-The following are missing Unit Tests:
-* getAnalysis()
-* getWindowsSymbolFile()
-'''

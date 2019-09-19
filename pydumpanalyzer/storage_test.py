@@ -2,20 +2,32 @@
 import io
 import os
 import unittest
+import unittest.mock
 
 import pytest
 from werkzeug.exceptions import HTTPException
 
-from flask_app_test import MockRequest
-from storage import DATABASE_FILE, REQUIRED_TABLES, Storage
+from storage import REQUIRED_TABLES, ROOT_STORAGE_LOCATION, Storage as _Storage, WINDOWS_SYMBOL_STORE
 
+class Storage(_Storage):
+    ''' overloaded class to swap the DATABASE_FILE location '''
+    DATABASE_FILE = os.path.join(ROOT_STORAGE_LOCATION, 'database_unit_tests.sqlite')
+
+class MockRequest(object):
+    ''' mocked out flask request object. '''
+    def __init__(self, files, form):
+        self.files = files # dict
+        for v in self.files.values():
+            v.filename = 'THEFILENAME'
+        self.form = form # dict
+        self.remote_addr = '127.0.0.1'
 
 class TestStorage(unittest.TestCase):
     ''' all tests for storage are in here '''
     def setUp(self):
         ''' called at the start of all tests '''
-        if os.path.isfile(DATABASE_FILE):
-            os.remove(DATABASE_FILE)
+        if os.path.isfile(Storage.DATABASE_FILE):
+            os.remove(Storage.DATABASE_FILE)
 
     def test_storage_context_manager(self):
         ''' ensure we can use Storage as a contextmanager '''
@@ -27,7 +39,7 @@ class TestStorage(unittest.TestCase):
             pass
 
         # deleting this file at this point means we closed it up.
-        os.remove(DATABASE_FILE)
+        os.remove(Storage.DATABASE_FILE)
 
     def test_storage_creates_needed_tables(self):
         ''' ensures required tables are auto created '''
@@ -36,7 +48,7 @@ class TestStorage(unittest.TestCase):
                 assert s.database.tableExists(tableName)
 
         # deleting this file at this point means we closed it up.
-        os.remove(DATABASE_FILE)
+        os.remove(Storage.DATABASE_FILE)
 
     def test_storage_get_application_table_name_and_reverse(self):
         ''' ensures that we can get the an application table '''
@@ -143,9 +155,72 @@ class TestStorage(unittest.TestCase):
             assert s.setApplicationCell('MyApp234', uid, 'Tag', 'NewTag!')
             assert s.getApplicationCell('MyApp234', uid, 'Tag') == 'NewTag!'
 
-'''
-TODO:
-* Make it so running unit tests doesn't affect the production database
-** Remove direct uses of DATABASE_FILE. Make it a member of Storage.
-** In all unit tests, use a mock Storage that changes the database file to something other than production.
-'''
+            assert s.setApplicationCell('MyApp2345', uid, 'Tag', 'NewTag!') is False
+
+    def test_get_analysis_with_and_without_cache(self):
+        ''' ensures we can get analysis for an app name/rowUid '''
+        request = MockRequest({
+            'SymbolsFile' : io.BytesIO(b'abcdefghijklmnopqrstuvwxyz'),
+            'ExecutableFile' : io.BytesIO(b'abcdefghijklmnopqrstuvwxyz'),
+            'CrashDumpFile' : io.BytesIO(b'abcdefghijklmnopqrstuvwxyz'),
+        }, {
+            'Application' : 'MyApp234',
+            'OperatingSystem' : 'Windows',
+            'Tag' : 'TestTag123',
+        })
+        with Storage() as s:
+            msg = s.addFromAddRequest(request)
+            uid = msg.split('UID:')[-1].strip()
+
+            with unittest.mock.patch('windbg.WinDbg.getAnalysis') as getAnalysis:
+                getAnalysis.return_value = "Hello"
+                analysis = s.getAnalysis('MyApp234', uid, useCache=False)
+                getAnalysis.assert_called_once()
+                assert analysis ==  "Hello"
+
+            # shouldn't need to mock since we're using the cache now
+            assert s.getAnalysis('MyApp234', uid, useCache=True) == "Hello"
+
+    def test_get_analysis_with_invalid_uid_and_name(self):
+        ''' ensures we can fail properly when using invalid params to getAnalysis '''
+        request = MockRequest({
+            'SymbolsFile' : io.BytesIO(b'abcdefghijklmnopqrstuvwxyz'),
+            'ExecutableFile' : io.BytesIO(b'abcdefghijklmnopqrstuvwxyz'),
+            'CrashDumpFile' : io.BytesIO(b'abcdefghijklmnopqrstuvwxyz'),
+        }, {
+            'Application' : 'MyApp234',
+            'OperatingSystem' : 'Windows',
+            'Tag' : 'TestTag123',
+        })
+        with Storage() as s:
+            msg = s.addFromAddRequest(request)
+            uid = msg.split('UID:')[-1].strip()
+
+            with pytest.raises(HTTPException):
+                s.getAnalysis('NotARealApp', '0', True)
+            with pytest.raises(HTTPException):
+                s.getAnalysis('NotARealApp', '0', False)
+            with pytest.raises(HTTPException):
+                s.getAnalysis('NotARealApp', uid, True)
+            with pytest.raises(HTTPException):
+                s.getAnalysis('NotARealApp', uid, False)
+
+    def test_get_windows_symbol_file(self):
+        ''' ensures we can get a file from the windows symbol store '''
+        testPath = os.path.join(WINDOWS_SYMBOL_STORE, 'test_file.txt')
+        with open(testPath, 'w') as f:
+            f.write("Hello")
+
+        with Storage() as s:
+            assert os.path.exists(s.getWindowsSymbolFilePath('test_file.txt'))
+
+            with open(s.getWindowsSymbolFilePath('test_file.txt'), 'r') as f:
+                assert f.read() == 'Hello'
+
+            os.remove(testPath)
+
+            with pytest.raises(HTTPException):
+                s.getWindowsSymbolFilePath('test_file_not_real.txt')
+
+            with pytest.raises(HTTPException):
+                s.getWindowsSymbolFilePath('../../storage.py')
