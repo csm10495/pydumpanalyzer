@@ -133,7 +133,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Source.cpp" />
+    <ClCompile Include="Logging.cpp" />
+    <ClCompile Include="PdaCrashContext.cpp" />
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Process.cpp" />
+    <ClCompile Include="Utility.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\local\breakpad\src\src\client\windows\common.vcxproj">
@@ -142,6 +146,12 @@
     <ProjectReference Include="..\..\local\breakpad\src\src\client\windows\crash_generation\crash_generation_server.vcxproj">
       <Project>{7329e90f-f87c-6c90-4864-1c5d7d09f5fd}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Logging.h" />
+    <ClInclude Include="PdaCrashContext.h" />
+    <ClInclude Include="Process.h" />
+    <ClInclude Include="Utility.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
