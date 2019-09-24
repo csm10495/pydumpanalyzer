@@ -13,7 +13,7 @@ std::wstring getCurrentExeFolder()
 {
 	wchar_t buffer[4096] = { 0 };
 
-	DWORD retLength = GetModuleFileNameW(NULL, buffer, sizeof(buffer));
+	DWORD retLength = GetModuleFileNameW(NULL, buffer, ARRAYSIZE(buffer));
 
 	std::wstring path(buffer, retLength);
 	return path.substr(0, path.find_last_of(L"\\/"));
