@@ -35,6 +35,18 @@ namespace pda
 		//! Reports this crash / context to the endpoint
 		bool report() const;
 
+		//! Returns the reporting server
+		std::shared_ptr<std::wstring> getReportingServer() const;
+
+		//! Returns the application name
+		std::shared_ptr<std::wstring> getApplicationName() const;
+
+		//! Returns the application version
+		std::shared_ptr<std::wstring> getApplicationVersion() const;
+
+		//! Returns the tag
+		std::shared_ptr<std::wstring> getTag() const;
+
 	private:
 		/* Strings */
 

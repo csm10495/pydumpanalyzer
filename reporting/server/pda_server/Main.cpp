@@ -7,8 +7,12 @@ MIT License - 2019 - Charles Machalow
 #include <iostream>
 #include <string>
 
+#ifdef _WIN32
 #include "client/windows/crash_generation/client_info.h"
 #include "client/windows/crash_generation/crash_generation_server.h"
+#else
+#error Implementation missing for OS
+#endif
 
 #include "../../local/CLI11.hpp"
 #include "Logging.h"
@@ -49,7 +53,6 @@ static void ShowClientExited(void* context, const google_breakpad::ClientInfo* c
 	LOG("Client with pid " + std::to_string(client_info->pid()) + " exited");
 }
 
-
 int main(int argc, char* argv[])
 {
 	CLI::App app{ "PyDumpAnalyzer (PDA) Crash Reporting Server" };
@@ -74,9 +77,9 @@ int main(int argc, char* argv[])
 
 	std::string applicationVersion;
 	app.add_option("-n, --application_version", applicationVersion, "The version for the application we're reporting for");
-	
+
 	std::string symbolsFilePath;
-	app.add_option("-y, --symbols", symbolsFilePath, "The path to a symbols file");	
+	app.add_option("-y, --symbols", symbolsFilePath, "The path to a symbols file");
 
 	std::string executableFilePath;
 	app.add_option("-e, --executable", symbolsFilePath, "The path to an executable file");
@@ -89,13 +92,13 @@ int main(int argc, char* argv[])
 	pda::setLogging(verbose);
 
 	pda::PdaCrashContext pdaCrashContext(pda::toWString(reportingServer), pda::toWString(application));
-	
+
 	/* Set all parameters we've been given */
 
 	if (tag.size())
 	{
 		pdaCrashContext.setTag(pda::toWString(tag));
-	}	
+	}
 
 	if (applicationVersion.size())
 	{
@@ -119,6 +122,7 @@ int main(int argc, char* argv[])
 
 	if (pidToMonitor)
 	{
+		std::wstring dumpPath = L".";
 		// pid was given, so monitor it
 		std::unique_ptr<google_breakpad::CrashGenerationServer> crashGenerationServer(
 			new google_breakpad::CrashGenerationServer(
@@ -133,7 +137,7 @@ int main(int argc, char* argv[])
 				NULL,
 				NULL,
 				true,
-				NULL));
+				&dumpPath));
 
 		if (!crashGenerationServer->Start())
 		{

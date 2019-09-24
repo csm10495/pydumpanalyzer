@@ -6,7 +6,11 @@ MIT License - 2019 - Charles Machalow
 #include "Logging.h"
 #include "PdaCrashContext.h"
 
+#ifdef _WIN32
 #include "common/windows/http_upload.h"
+#else
+#error Implementation missing for OS
+#endif
 
 #include <chrono>
 
@@ -75,17 +79,17 @@ namespace pda
 
 		if (this->SymbolsFile)
 		{
-			parameters[L"SymbolsFile"] = *this->SymbolsFile;
+			files[L"SymbolsFile"] = *this->SymbolsFile;
 		}
 
 		if (this->ExecutableFile)
 		{
-			parameters[L"ExecutableFile"] = *this->ExecutableFile;
+			files[L"ExecutableFile"] = *this->ExecutableFile;
 		}
 
 		if (this->CrashDumpFile)
 		{
-			parameters[L"CrashDumpFile"] = *this->CrashDumpFile;
+			files[L"CrashDumpFile"] = *this->CrashDumpFile;
 		}
 
 		LOG("Files:");
@@ -107,7 +111,57 @@ namespace pda
 		LOG(L"Response Code:" + std::to_wstring(responseCode));
 		LOG(L"Response body:" + responseBody);
 
+		/* This code would force analysis generation... now (and its ok to timeout since the server will still finish generation)
+		auto uid = responseBody.substr(25);
+
+		int timeout = 1;
+		google_breakpad::HTTPUpload::SendGetRequest(L"http://localhost:5000/get/analysis/" + *this->ApplicationName + L"/" + uid,
+			&timeout,
+			&responseBody,
+			&responseCode);
+		*/
 		return result;
+	}
+
+	std::shared_ptr<std::wstring> PdaCrashContext::getReportingServer() const
+	{
+		if (ReportingServer)
+		{
+			return std::make_shared <std::wstring>(*ReportingServer);
+		}
+
+		return {};
+
+	}
+
+	std::shared_ptr<std::wstring> PdaCrashContext::getApplicationName() const
+	{
+		if (ApplicationName)
+		{
+			return std::make_shared <std::wstring>(*ApplicationName);
+		}
+
+		return {};
+	}
+
+	std::shared_ptr<std::wstring> PdaCrashContext::getApplicationVersion() const
+	{
+		if (ApplicationVersion)
+		{
+			return std::make_shared <std::wstring>(*ApplicationVersion);
+		}
+
+		return {};
+	}
+
+	std::shared_ptr<std::wstring> PdaCrashContext::getTag() const
+	{
+		if (Tag)
+		{
+			return std::make_shared <std::wstring>(*Tag);
+		}
+
+		return {};
 	}
 };
 

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -20,8 +20,8 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
-    <ProjectGuid>{0CB170C2-7D46-4EEA-B66D-C7F0DFCB9689}</ProjectGuid>
-    <RootNamespace>pdaserver</RootNamespace>
+    <ProjectGuid>{B32E14DF-A7F3-404A-980E-B8D3C41FA70C}</ProjectGuid>
+    <RootNamespace>pdacrasher</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -154,11 +154,20 @@
     <ProjectReference Include="..\..\local\breakpad\src\src\client\windows\common.vcxproj">
       <Project>{c3e47941-ff55-cea1-3da2-b2f9995c2a6d}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\..\local\breakpad\src\src\client\windows\crash_generation\crash_generation_client.vcxproj">
+      <Project>{19fda561-1ce4-6fc8-c7d8-b264359ab5bc}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\..\local\breakpad\src\src\client\windows\crash_generation\crash_generation_server.vcxproj">
       <Project>{7329e90f-f87c-6c90-4864-1c5d7d09f5fd}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\..\local\breakpad\src\src\client\windows\handler\exception_handler.vcxproj">
+      <Project>{28ddbd75-c8aa-7784-c27f-6674a9d93f29}</Project>
+    </ProjectReference>
     <ProjectReference Include="..\pda\pda.vcxproj">
       <Project>{42bf993a-672a-48eb-af93-8a0c8f661c15}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\pda_server\pda_server.vcxproj">
+      <Project>{0cb170c2-7d46-4eea-b66d-c7f0dfcb9689}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
